@@ -1,0 +1,37 @@
+{
+  "currency": "JPY",
+  "unit": "L",
+  "updated": "2026-06-09",
+  "stations": [
+    {
+      "id": "node:123456789",
+      "name": "サンプル給油所",
+      "prices": [
+        {
+          "date": "2026-06-06",
+          "regular": 169,
+          "premium": 181,
+          "diesel": 151
+        },
+        {
+          "date": "2026-06-07",
+          "regular": 170,
+          "premium": 182,
+          "diesel": 150
+        },
+        {
+          "date": "2026-06-08",
+          "regular": 171,
+          "premium": 183,
+          "diesel": 149
+        },
+        {
+          "date": "2026-06-09",
+          "regular": 172,
+          "premium": 184,
+          "diesel": 148
+        }
+      ]
+    }
+  ]
+}
