@@ -13,6 +13,43 @@ const GRADE_LABELS = {
 };
 const PRICE_GRADES = ["regular", "premium", "diesel"];
 const NEAR_CHEAP_DELTA = 3;
+const STATION_LIMIT = 40;
+const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
+const TILE_PROVIDERS = [
+  {
+    id: "osm",
+    label: "OpenStreetMap",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    options: {
+      subdomains: "abc",
+      maxZoom: 19,
+      maxNativeZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors",
+    },
+  },
+  {
+    id: "carto-light",
+    label: "CARTO Light",
+    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    options: {
+      subdomains: "abcd",
+      maxZoom: 19,
+      maxNativeZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    },
+  },
+  {
+    id: "carto-simple",
+    label: "CARTO Simple",
+    url: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
+    options: {
+      subdomains: "abcd",
+      maxZoom: 19,
+      maxNativeZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    },
+  },
+];
 
 const state = {
   home: null,
@@ -28,6 +65,8 @@ const state = {
   cheapestStationId: null,
   nearCheapStationId: null,
   hasRequestedLocation: false,
+  stationFetchStatus: "idle",
+  stationFetchMessage: "",
   priceSeed: defaultPriceSeed(),
   priceSeedLoaded: false,
 };
@@ -36,10 +75,15 @@ const el = {};
 let map;
 let homeMarker;
 let baseLayer;
-let baseLayerType = "";
+let baseLayerProviderIndex = 0;
+let tileFallbackTimer = null;
+let tileLoadToken = 0;
+let loadedTileCount = 0;
+let failedTileCount = 0;
 let rangeCircle;
 let stationLayer;
 let stationMarkers = new Map();
+let stationRequestToken = 0;
 
 const days = makeDateRange(14);
 
@@ -318,12 +362,13 @@ function setupMap() {
     preferCanvas: true,
     updateWhenIdle: true,
     wheelDebounceTime: 60,
-    attributionControl: false,
+    attributionControl: true,
   }).setView(
     [state.home?.lat ?? DEFAULT_VIEW.lat, state.home?.lng ?? DEFAULT_VIEW.lng],
     state.home ? 13 : DEFAULT_VIEW.zoom,
   );
 
+  map.attributionControl.setPrefix("");
   L.control.zoom({ position: "bottomleft" }).addTo(map);
   L.control.scale({ imperial: false, metric: true, position: "bottomleft" }).addTo(map);
   updateBaseLayer();
@@ -385,55 +430,159 @@ async function refreshStations() {
   }
 
   state.selectedStationId = null;
-  setStatus("軽量道路マップで表示中");
+  state.stationFetchStatus = "loading";
+  state.stationFetchMessage = "実在スタンドを検索しています...";
+  state.stations = [];
+  renderAll();
+  setStatus(state.stationFetchMessage);
   updateHomeMarker();
   updateBaseLayer();
   map.setView([state.home.lat, state.home.lng], radiusToZoom(state.radius), { animate: false });
-  state.stations = makeFallbackStations(state.home, state.radius);
-  renderAll();
+
+  const token = (stationRequestToken += 1);
+  try {
+    const stations = await fetchRealStations(state.home, state.radius);
+    if (token !== stationRequestToken) return;
+
+    state.stations = stations;
+    state.stationFetchStatus = stations.length > 0 ? "ready" : "empty";
+    state.stationFetchMessage =
+      stations.length > 0
+        ? `${stations.length} 件の実在スタンドを表示中`
+        : "半径内の実在スタンドが見つかりません。距離を広げて再取得してください";
+    renderAll();
+    setStatus(state.stationFetchMessage);
+  } catch {
+    if (token !== stationRequestToken) return;
+
+    state.stations = [];
+    state.stationFetchStatus = "error";
+    state.stationFetchMessage =
+      "実在スタンドを取得できません。通信後に再取得するか距離を広げてください";
+    renderAll();
+    setStatus(state.stationFetchMessage);
+  }
 }
 
-function makeFallbackStations(home, radius = 2000) {
-  const names = [
-    "近くのセルフ 1",
-    "近くの給油所 2",
-    "近くのスタンド 3",
-    "近くのエネルギー 4",
-    "近くのサービス 5",
-    "近くのフューエル 6",
-    "近くのセルフ 7",
-    "近くのスタンド 8",
-  ];
-  const offsets = [
-    [520, -360],
-    [-760, 430],
-    [1100, 780],
-    [-1220, -650],
-    [1680, -210],
-    [450, 1420],
-    [-1540, 980],
-    [1980, 760],
-  ];
-  const scale = clamp(radius / 2000, 0.6, 2.4);
+async function fetchRealStations(home, radius) {
+  const primary = await fetchNominatimStations(home, radius, "amenity");
+  if (primary.length > 0) return primary;
+  return fetchNominatimStations(home, radius, "query");
+}
 
-  return names.map((name, index) => {
-    const point = offsetCoordinate(
-      home.lat,
-      home.lng,
-      offsets[index][0] * scale,
-      offsets[index][1] * scale,
-    );
-    return {
-      id: `demo:${index}:${home.lat.toFixed(3)}:${home.lng.toFixed(3)}`,
-      name,
-      brand: "推定",
-      address: "現在地周辺",
-      lat: point.lat,
-      lng: point.lng,
-      distance: distanceKm(home.lat, home.lng, point.lat, point.lng),
-      source: "demo",
-    };
+async function fetchNominatimStations(home, radius, mode) {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    bounded: "1",
+    limit: String(STATION_LIMIT),
+    viewbox: boundingBox(home.lat, home.lng, radius),
+    addressdetails: "1",
+    extratags: "1",
+    namedetails: "1",
+    "accept-language": "ja",
   });
+
+  if (mode === "amenity") {
+    params.set("amenity", "fuel");
+  } else {
+    params.set("q", "gas station");
+  }
+
+  const items = await fetchJsonWithTimeout(`${NOMINATIM_ENDPOINT}?${params.toString()}`, 9000);
+  if (!Array.isArray(items)) return [];
+
+  const unique = new Map();
+  items.forEach((item) => {
+    const station = normalizeNominatimStation(item, home, radius);
+    if (station && !unique.has(station.id)) unique.set(station.id, station);
+  });
+
+  return [...unique.values()]
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, STATION_LIMIT);
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`station search ${response.status}`);
+    return response.json();
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function normalizeNominatimStation(item, home, radius) {
+  const lat = Number(item?.lat);
+  const lng = Number(item?.lon);
+  if (!validCoords(lat, lng)) return null;
+
+  const distance = distanceKm(home.lat, home.lng, lat, lng);
+  if (distance * 1000 > radius + 60) return null;
+  if (item.class && item.class !== "amenity") return null;
+  if (item.type && item.type !== "fuel") return null;
+
+  const namedetails = item.namedetails || {};
+  const extratags = item.extratags || {};
+  const displayParts = String(item.display_name || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const brand =
+    namedetails["brand:ja"] ||
+    extratags["brand:ja"] ||
+    extratags.brand ||
+    namedetails.brand ||
+    "";
+  const operator =
+    namedetails["operator:ja"] ||
+    extratags["operator:ja"] ||
+    extratags.operator ||
+    namedetails.operator ||
+    "";
+  const name =
+    namedetails["name:ja"] ||
+    namedetails.name ||
+    item.name ||
+    brand ||
+    operator ||
+    displayParts[0] ||
+    "ガソリンスタンド";
+  const address = compactAddress(displayParts, name);
+  const rawId = item.osm_type && item.osm_id ? `${item.osm_type}:${item.osm_id}` : item.place_id;
+
+  return {
+    id: `osm:${rawId}`,
+    name,
+    brand: brand && brand !== name ? brand : "",
+    address,
+    lat,
+    lng,
+    distance,
+    source: "osm",
+  };
+}
+
+function boundingBox(lat, lng, radiusMeters) {
+  const latOffset = radiusMeters / 111320;
+  const lngOffset = radiusMeters / (111320 * Math.max(Math.cos(toRadians(lat)), 0.2));
+  const left = lng - lngOffset;
+  const right = lng + lngOffset;
+  const top = lat + latOffset;
+  const bottom = lat - latOffset;
+  return [left, top, right, bottom].map((value) => value.toFixed(6)).join(",");
+}
+
+function compactAddress(parts, name) {
+  const filtered = parts.filter((part, index) => index !== 0 || part !== name);
+  const useful = filtered.filter((part) => part !== "日本").slice(0, 4);
+  return useful.join("、") || "OpenStreetMap 登録地点";
 }
 
 function renderAll() {
@@ -458,7 +607,7 @@ function renderSourceBadge() {
     el.sourceBadge.textContent = "取込価格";
     return;
   }
-  el.sourceBadge.textContent = state.priceSeedLoaded ? "自動更新価格" : "推定価格";
+  el.sourceBadge.textContent = state.priceSeedLoaded ? "毎日更新・推定" : "推定価格";
 }
 
 function renderMetrics() {
@@ -563,13 +712,23 @@ function renderList() {
   el.stationCount.textContent = String(views.length);
 
   if (views.length === 0) {
+    const message =
+      state.stationFetchMessage ||
+      (state.home
+        ? "半径内の実在スタンドを取得できませんでした"
+        : "現在地を許可すると近くのスタンドを表示します");
+    const showLocate = !state.home || state.stationFetchStatus === "idle";
     el.stationList.innerHTML = `
-      <div class="empty-state">
-        <span>現在地を許可すると近くのスタンドを表示します</span>
-        <button type="button" data-action="locate">
-          <i data-lucide="crosshair"></i>
-          現在地
-        </button>
+      <div class="empty-state ${state.stationFetchStatus === "loading" ? "is-loading" : ""}">
+        <span>${escapeHtml(message)}</span>
+        ${
+          showLocate
+            ? `<button type="button" data-action="locate">
+                <i data-lucide="crosshair"></i>
+                現在地
+              </button>`
+            : ""
+        }
       </div>
     `;
     return;
@@ -581,6 +740,9 @@ function renderList() {
       const price = view.price === null ? "--" : money(view.price);
       const source = priceSourceLabel(view.priceSource);
       const brand = view.station.brand ? `<span>${escapeHtml(view.station.brand)}</span>` : "";
+      const address = view.station.address
+        ? `<span class="station-address">${escapeHtml(view.station.address)}</span>`
+        : "";
       const priceStrip = PRICE_GRADES.map((grade) => priceChip(view, grade)).join("");
       return `
         <article class="station-card${selected}" data-station-id="${escapeHtml(
@@ -594,6 +756,7 @@ function renderList() {
                 ${brand}
                 <span>${source}</span>
               </span>
+              ${address}
               <span class="price-strip">${priceStrip}</span>
             </span>
             <span class="station-price">
@@ -779,7 +942,7 @@ function baselineForGrade(grade, priceSeed) {
 
 function priceSourceLabel(source) {
   if (source === "imported") return "取込";
-  if (source === "auto") return "自動";
+  if (source === "auto") return "推定";
   return "推定";
 }
 
@@ -928,31 +1091,62 @@ function updateRangeCircle() {
 
 function updateBaseLayer() {
   const mapEl = document.getElementById("map");
-  if (baseLayer && baseLayerType === "roads") return;
+  if (baseLayer) return;
+  addTileProvider(baseLayerProviderIndex, mapEl);
+}
+
+function addTileProvider(providerIndex, mapEl) {
   if (baseLayer) baseLayer.remove();
+  if (tileFallbackTimer) window.clearTimeout(tileFallbackTimer);
+
+  const provider = TILE_PROVIDERS[providerIndex];
+  if (!provider) {
+    baseLayer = null;
+    mapEl?.classList.add("map-lite");
+    setStatus("簡易マップで表示中。道路地図は読み込めませんでした");
+    return;
+  }
 
   mapEl?.classList.remove("map-lite");
-  baseLayerType = "roads";
-  baseLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
-    subdomains: "abcd",
-    maxZoom: 19,
-    maxNativeZoom: 19,
+  baseLayerProviderIndex = providerIndex;
+  loadedTileCount = 0;
+  failedTileCount = 0;
+  const token = (tileLoadToken += 1);
+
+  baseLayer = L.tileLayer(provider.url, {
     detectRetina: true,
     updateWhenIdle: true,
     updateWhenZooming: false,
     keepBuffer: 2,
-    attribution: "&copy; OpenStreetMap &copy; CARTO",
+    ...provider.options,
+  });
+
+  baseLayer.on("tileload", () => {
+    if (token !== tileLoadToken) return;
+    loadedTileCount += 1;
+    if (loadedTileCount === 1) {
+      setStatus(
+        state.stationFetchStatus === "loading"
+          ? state.stationFetchMessage
+          : `${provider.label} で道路地図を表示中`,
+      );
+    }
   });
 
   baseLayer.on("tileerror", () => {
-    if (baseLayerType !== "roads") return;
-    baseLayerType = "lite";
-    baseLayer.remove();
-    baseLayer = null;
-    mapEl?.classList.add("map-lite");
-    setStatus("軽量簡易マップで表示中");
+    if (token !== tileLoadToken) return;
+    failedTileCount += 1;
+    if (loadedTileCount === 0 && failedTileCount >= 4) {
+      addTileProvider(providerIndex + 1, mapEl);
+    }
   });
+
   baseLayer.addTo(map);
+  tileFallbackTimer = window.setTimeout(() => {
+    if (token === tileLoadToken && loadedTileCount === 0) {
+      addTileProvider(providerIndex + 1, mapEl);
+    }
+  }, 4500);
 }
 
 function isInJapan(lat, lng) {
@@ -986,6 +1180,7 @@ function popupHtml(view) {
     <div class="popup">
       <strong>${escapeHtml(view.station.name)}</strong>
       <div class="popup-prices">${threePrices}</div>
+      <div class="popup-row"><span>住所</span><b>${escapeHtml(view.station.address || "--")}</b></div>
       <div class="popup-row"><span>前日比</span><b>${change}</b></div>
       <div class="popup-row"><span>距離</span><b>${distanceLabel(view.station.distance)}</b></div>
       <div class="popup-row"><span>ソース</span><b>${source}</b></div>
