@@ -164,6 +164,13 @@ function hydrateControls() {
 }
 
 function bindEvents() {
+  document.addEventListener("click", (event) => {
+    const mapLink = event.target.closest("a[data-map-url]");
+    if (!mapLink) return;
+    event.preventDefault();
+    openMapLink(mapLink.dataset.mapUrl, mapLink.dataset.fallbackUrl);
+  });
+
   el.locateButton.addEventListener("click", locateUser);
   el.demoButton.addEventListener("click", locateUser);
 
@@ -513,10 +520,10 @@ function renderDealCards(cheapest, nearCheap) {
 
   setDealCard(el.cheapestButton, el.cheapestName, el.cheapestMeta, cheapest);
   setDealCard(el.nearCheapButton, el.nearCheapName, el.nearCheapMeta, nearCheap);
-  setQuickNav(el.cheapestGoogleLink, cheapest, googleMapsUrl);
-  setQuickNav(el.cheapestAppleLink, cheapest, appleMapsUrl);
-  setQuickNav(el.nearCheapGoogleLink, nearCheap, googleMapsUrl);
-  setQuickNav(el.nearCheapAppleLink, nearCheap, appleMapsUrl);
+  setQuickNav(el.cheapestGoogleLink, cheapest, "google");
+  setQuickNav(el.cheapestAppleLink, cheapest, "apple");
+  setQuickNav(el.nearCheapGoogleLink, nearCheap, "google");
+  setQuickNav(el.nearCheapAppleLink, nearCheap, "apple");
 }
 
 function setDealCard(button, nameEl, metaEl, view) {
@@ -536,9 +543,11 @@ function setDealCard(button, nameEl, metaEl, view) {
   )}`;
 }
 
-function setQuickNav(link, view, urlBuilder) {
+function setQuickNav(link, view, kind) {
   if (!view) {
     link.href = "#";
+    delete link.dataset.mapUrl;
+    delete link.dataset.fallbackUrl;
     link.removeAttribute("target");
     link.removeAttribute("rel");
     link.setAttribute("aria-disabled", "true");
@@ -546,8 +555,7 @@ function setQuickNav(link, view, urlBuilder) {
     return;
   }
 
-  link.href = urlBuilder(view.station);
-  link.target = "_self";
+  configureMapLink(link, view.station, kind);
   link.removeAttribute("aria-disabled");
   link.classList.remove("is-disabled");
 }
@@ -629,17 +637,13 @@ function renderList() {
             </span>
           </button>
           <nav class="nav-links" aria-label="${escapeHtml(view.station.name)} へのナビ">
-            <a class="nav-start" href="${defaultNavUrl(view.station)}">
-              <i data-lucide="route"></i>
-              ナビ開始
-            </a>
-            <a href="${googleMapsUrl(view.station)}">
+            <a class="google-link" ${mapLinkAttrs(view.station, "google")}>
               <i data-lucide="navigation"></i>
-              Google
+              Google マップ
             </a>
-            <a href="${appleMapsUrl(view.station)}">
+            <a class="apple-link" ${mapLinkAttrs(view.station, "apple")}>
               <i data-lucide="map"></i>
-              Apple
+              Apple マップ
             </a>
           </nav>
         </article>
@@ -991,20 +995,71 @@ function popupHtml(view) {
       <div class="popup-row"><span>距離</span><b>${distanceLabel(view.station.distance)}</b></div>
       <div class="popup-row"><span>ソース</span><b>${source}</b></div>
       <div class="popup-actions">
-        <a class="nav-start" href="${defaultNavUrl(view.station)}">ナビ開始</a>
-        <a href="${googleMapsUrl(view.station)}">Google</a>
-        <a href="${appleMapsUrl(view.station)}">Apple</a>
+        <a class="google-link" ${mapLinkAttrs(view.station, "google")}>Google マップ</a>
+        <a class="apple-link" ${mapLinkAttrs(view.station, "apple")}>Apple マップ</a>
       </div>
     </div>
   `;
 }
 
-function defaultNavUrl(station) {
-  if (isAppleDevice()) return appleMapsUrl(station);
-  return googleMapsUrl(station);
+function configureMapLink(link, station, kind) {
+  const { primary, fallback } = mapLinkData(station, kind);
+  link.href = primary;
+  link.dataset.mapUrl = primary;
+  link.dataset.fallbackUrl = fallback;
+  link.removeAttribute("target");
+  link.removeAttribute("rel");
 }
 
-function googleMapsUrl(station) {
+function mapLinkAttrs(station, kind) {
+  const { primary, fallback } = mapLinkData(station, kind);
+  return `href="${escapeHtml(primary)}" data-map-url="${escapeHtml(
+    primary,
+  )}" data-fallback-url="${escapeHtml(fallback)}"`;
+}
+
+function mapLinkData(station, kind) {
+  if (kind === "apple") {
+    const primary = isAppleDevice() ? appleMapsAppUrl(station) : appleMapsWebUrl(station);
+    return { primary, fallback: appleMapsWebUrl(station) };
+  }
+
+  const primary = isAndroidDevice()
+    ? googleMapsAndroidUrl(station)
+    : isAppleDevice()
+      ? googleMapsIosUrl(station)
+      : googleMapsWebUrl(station);
+  return { primary, fallback: googleMapsWebUrl(station) };
+}
+
+function openMapLink(primary, fallback) {
+  if (!primary) return;
+
+  const startedAt = Date.now();
+  window.location.href = primary;
+
+  if (!fallback || fallback === primary) return;
+
+  window.setTimeout(() => {
+    if (document.visibilityState === "visible" && Date.now() - startedAt < 1800) {
+      window.location.href = fallback;
+    }
+  }, 900);
+}
+
+function googleMapsIosUrl(station) {
+  const params = new URLSearchParams({
+    daddr: `${station.lat},${station.lng}`,
+    directionsmode: "driving",
+  });
+  return `comgooglemaps://?${params.toString()}`;
+}
+
+function googleMapsAndroidUrl(station) {
+  return `google.navigation:q=${encodeURIComponent(`${station.lat},${station.lng}`)}&mode=d`;
+}
+
+function googleMapsWebUrl(station) {
   const destination = `${station.lat},${station.lng}`;
   const params = new URLSearchParams({
     api: "1",
@@ -1016,7 +1071,17 @@ function googleMapsUrl(station) {
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-function appleMapsUrl(station) {
+function appleMapsAppUrl(station) {
+  const destination = `${station.lat},${station.lng}`;
+  const params = new URLSearchParams({
+    daddr: destination,
+    q: station.name,
+    dirflg: "d",
+  });
+  return `maps://?${params.toString()}`;
+}
+
+function appleMapsWebUrl(station) {
   const destination = `${station.lat},${station.lng}`;
   const params = new URLSearchParams({
     daddr: destination,
@@ -1030,6 +1095,10 @@ function isAppleDevice() {
   const platform = navigator.platform || "";
   const userAgent = navigator.userAgent || "";
   return /iPad|iPhone|iPod|Macintosh/.test(platform) || /iPad|iPhone|iPod|Mac OS X/.test(userAgent);
+}
+
+function isAndroidDevice() {
+  return /Android/.test(navigator.userAgent || "");
 }
 
 function setStatus(message) {
