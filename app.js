@@ -527,6 +527,7 @@ function normalizeNominatimStation(item, home, radius) {
   if (distance * 1000 > radius + 60) return null;
   if (item.class && item.class !== "amenity") return null;
   if (item.type && item.type !== "fuel") return null;
+  if (!isUsableFuelResult(item)) return null;
 
   const namedetails = item.namedetails || {};
   const extratags = item.extratags || {};
@@ -554,19 +555,74 @@ function normalizeNominatimStation(item, home, radius) {
     operator ||
     displayParts[0] ||
     "ガソリンスタンド";
-  const address = compactAddress(displayParts, name);
+  const branch = extratags["branch:ja"] || extratags.branch || "";
+  const displayName =
+    branch && !name.includes(branch) && !normalizeName(name).includes(normalizeName(branch))
+      ? `${name} ${branch}`
+      : name;
+  const formattedAddress = formatStationAddress(item, displayParts, displayName);
   const rawId = item.osm_type && item.osm_id ? `${item.osm_type}:${item.osm_id}` : item.place_id;
 
   return {
     id: `osm:${rawId}`,
-    name,
-    brand: brand && brand !== name ? brand : "",
-    address,
+    name: displayName,
+    brand: brand && brand !== displayName ? brand : "",
+    address: formattedAddress.text,
+    addressQuality: formattedAddress.quality,
+    coordinateLabel: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+    osmRef: item.osm_type && item.osm_id ? `${item.osm_type} ${item.osm_id}` : "",
     lat,
     lng,
     distance,
     source: "osm",
   };
+}
+
+function isUsableFuelResult(item) {
+  const tags = item.extratags || {};
+  const namedetails = item.namedetails || {};
+  const nameText = [
+    item.name,
+    namedetails.name,
+    namedetails["name:ja"],
+    tags.brand,
+    tags["brand:ja"],
+    tags.operator,
+    tags.branch,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const inactiveKeys = [
+    "abandoned",
+    "abandoned:amenity",
+    "abandoned:place",
+    "construction",
+    "demolished:amenity",
+    "disused",
+    "disused:amenity",
+    "razed:amenity",
+    "was:amenity",
+  ];
+  if (inactiveKeys.some((key) => truthyTag(tags[key]))) return false;
+  if (String(tags.landuse || "").toLowerCase() === "construction") return false;
+
+  const fuelKeys = Object.keys(tags).filter((key) => key.startsWith("fuel:") && truthyTag(tags[key]));
+  const hasLiquidFuel = fuelKeys.some((key) =>
+    /diesel|octane|gasoline|petrol|e10|e85|biodiesel/.test(key),
+  );
+  const lpgOnly =
+    /astomos|オートガス|auto gas|lpg|lpガス|lp gas/i.test(nameText) ||
+    (truthyTag(tags["fuel:lpg"]) &&
+      !hasLiquidFuel &&
+      (truthyTag(tags.industrial) || /ガス|gas/i.test(nameText)));
+
+  return !lpgOnly;
+}
+
+function truthyTag(value) {
+  if (value === true) return true;
+  return ["yes", "true", "1", "designated"].includes(String(value || "").toLowerCase());
 }
 
 function boundingBox(lat, lng, radiusMeters) {
@@ -579,10 +635,51 @@ function boundingBox(lat, lng, radiusMeters) {
   return [left, top, right, bottom].map((value) => value.toFixed(6)).join(",");
 }
 
-function compactAddress(parts, name) {
-  const filtered = parts.filter((part, index) => index !== 0 || part !== name);
-  const useful = filtered.filter((part) => part !== "日本").slice(0, 4);
-  return useful.join("、") || "OpenStreetMap 登録地点";
+function formatStationAddress(item, displayParts, name) {
+  const address = item.address || {};
+  const postcode = normalizePostcode(address.postcode);
+  const structured = uniqueAddressParts([
+    postcode ? `〒${postcode}` : "",
+    address.province || address.state || address.region || "",
+    address.city || address.town || address.village || address.municipality || "",
+    address.suburb || address.city_district || address.borough || "",
+    address.neighbourhood || address.quarter || address.hamlet || "",
+    address.road || address.pedestrian || address.footway || "",
+    address.house_number || "",
+  ]);
+
+  if (structured.length >= 3) {
+    return {
+      text: structured.join(" "),
+      quality: address.house_number ? "番地あり" : address.road ? "町域・道路" : "町域",
+    };
+  }
+
+  const displayAddress = displayParts
+    .filter((part) => part && part !== name && part !== "日本")
+    .join("、");
+
+  return {
+    text: displayAddress || "OpenStreetMap 登録地点",
+    quality: displayAddress ? "地図登録住所" : "座標のみ",
+  };
+}
+
+function normalizePostcode(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.startsWith("〒") ? text.slice(1) : text;
+}
+
+function uniqueAddressParts(parts) {
+  const seen = new Set();
+  return parts
+    .map((part) => String(part || "").trim())
+    .filter((part) => {
+      if (!part || part === "日本" || seen.has(part)) return false;
+      seen.add(part);
+      return true;
+    });
 }
 
 function renderAll() {
@@ -743,6 +840,12 @@ function renderList() {
       const address = view.station.address
         ? `<span class="station-address">${escapeHtml(view.station.address)}</span>`
         : "";
+      const addressMeta = `
+        <span class="station-location-meta">
+          <span>${escapeHtml(view.station.addressQuality || "地図登録住所")}</span>
+          <span>座標 ${escapeHtml(view.station.coordinateLabel || "")}</span>
+        </span>
+      `;
       const priceStrip = PRICE_GRADES.map((grade) => priceChip(view, grade)).join("");
       return `
         <article class="station-card${selected}" data-station-id="${escapeHtml(
@@ -757,6 +860,7 @@ function renderList() {
                 <span>${source}</span>
               </span>
               ${address}
+              ${addressMeta}
               <span class="price-strip">${priceStrip}</span>
             </span>
             <span class="station-price">
@@ -1181,9 +1285,16 @@ function popupHtml(view) {
       <strong>${escapeHtml(view.station.name)}</strong>
       <div class="popup-prices">${threePrices}</div>
       <div class="popup-row"><span>住所</span><b>${escapeHtml(view.station.address || "--")}</b></div>
+      <div class="popup-row"><span>住所精度</span><b>${escapeHtml(view.station.addressQuality || "--")}</b></div>
+      <div class="popup-row"><span>座標</span><b>${escapeHtml(view.station.coordinateLabel || "--")}</b></div>
       <div class="popup-row"><span>前日比</span><b>${change}</b></div>
       <div class="popup-row"><span>距離</span><b>${distanceLabel(view.station.distance)}</b></div>
       <div class="popup-row"><span>ソース</span><b>${source}</b></div>
+      ${
+        view.station.osmRef
+          ? `<div class="popup-row"><span>OSM</span><b>${escapeHtml(view.station.osmRef)}</b></div>`
+          : ""
+      }
       <div class="popup-actions">
         <a class="google-link" ${mapLinkAttrs(view.station, "google")}>Google マップ</a>
         <a class="apple-link" ${mapLinkAttrs(view.station, "apple")}>Apple マップ</a>

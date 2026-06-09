@@ -482,14 +482,32 @@ h1 {
 
 .station-address {
   display: block;
-  overflow: hidden;
   margin-top: 5px;
   color: #5f6d65;
   font-size: 11px;
   font-weight: 650;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.station-location-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+  color: #7a8580;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.station-location-meta span {
+  display: inline-flex;
+  min-height: 19px;
+  align-items: center;
+  border: 1px solid #e2e8e2;
+  border-radius: 999px;
+  background: #f7faf6;
+  padding: 1px 7px;
 }
 
 .station-price {
