@@ -33,6 +33,8 @@ const state = {
   cheapestStationId: null,
   nearCheapStationId: null,
   hasRequestedLocation: false,
+  priceSeed: defaultPriceSeed(),
+  priceSeedLoaded: false,
 };
 
 const el = {};
@@ -48,9 +50,10 @@ let fetchToken = 0;
 
 const days = makeDateRange(14);
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   cacheElements();
   restoreState();
+  await loadDailyPriceSeed();
   hydrateControls();
   setupMap();
   bindEvents();
@@ -161,6 +164,66 @@ function hydrateControls() {
   el.priceModeInput.value = state.priceMode;
   el.dateRange.max = String(days.length - 1);
   el.dateRange.value = String(state.selectedDateIndex);
+}
+
+async function loadDailyPriceSeed() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 2500);
+
+  try {
+    const response = await fetch(`./data/daily-price-seed.json?v=${Date.now()}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`price seed ${response.status}`);
+    state.priceSeed = normalizeDailyPriceSeed(await response.json());
+    state.priceSeedLoaded = true;
+  } catch {
+    state.priceSeed = defaultPriceSeed();
+    state.priceSeedLoaded = false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function normalizeDailyPriceSeed(feed) {
+  const fallback = defaultPriceSeed();
+  const baselines = feed?.baselines || {};
+  const updated =
+    typeof feed?.updated === "string" && /^\d{4}-\d{2}-\d{2}$/.test(feed.updated)
+      ? feed.updated
+      : fallback.updated;
+
+  return {
+    updated,
+    currency: "JPY",
+    unit: "L",
+    source: "daily-estimate",
+    salt: String(feed?.salt || `${updated}-daily`),
+    baselines: {
+      regular: numericPrice(baselines.regular) ?? fallback.baselines.regular,
+      premium: numericPrice(baselines.premium) ?? fallback.baselines.premium,
+      diesel: numericPrice(baselines.diesel) ?? fallback.baselines.diesel,
+    },
+  };
+}
+
+function defaultPriceSeed() {
+  const updated = toIsoDate(new Date());
+  const seed = hashString(updated);
+  const regular = 166 + (seed % 9);
+  return {
+    updated,
+    currency: "JPY",
+    unit: "L",
+    source: "local-estimate",
+    salt: `${updated}-${seed}`,
+    baselines: {
+      regular,
+      premium: regular + 13,
+      diesel: regular - 17,
+    },
+  };
 }
 
 function bindEvents() {
@@ -484,7 +547,7 @@ function renderSourceBadge() {
     el.sourceBadge.textContent = "取込価格";
     return;
   }
-  el.sourceBadge.textContent = "推定価格";
+  el.sourceBadge.textContent = state.priceSeedLoaded ? "自動更新価格" : "推定価格";
 }
 
 function renderMetrics() {
@@ -605,7 +668,7 @@ function renderList() {
     .map((view) => {
       const selected = view.station.id === state.selectedStationId ? " is-selected" : "";
       const price = view.price === null ? "--" : money(view.price);
-      const source = view.priceSource === "imported" ? "取込" : "推定";
+      const source = priceSourceLabel(view.priceSource);
       const brand = view.station.brand ? `<span>${escapeHtml(view.station.brand)}</span>` : "";
       const priceStrip = PRICE_GRADES.map((grade) => priceChip(view, grade)).join("");
       return `
@@ -758,7 +821,7 @@ function getSeries(station) {
       return { source: "imported", series: imported };
     }
   }
-  return { source: "demo", series: makeDemoSeries(station) };
+  return { source: state.priceSeedLoaded ? "auto" : "demo", series: makeDemoSeries(station) };
 }
 
 function getImportedSeries(station) {
@@ -772,29 +835,41 @@ function getImportedSeries(station) {
 }
 
 function makeDemoSeries(station) {
-  const seed = hashString(`${station.id}:${station.name}`);
-  const base = 164 + (seed % 24);
-  const gradeOffsets = {
-    regular: 0,
-    premium: 14,
-    diesel: -17,
-  };
+  const priceSeed = state.priceSeed || defaultPriceSeed();
+  const seed = hashString(`${priceSeed.salt}:${station.id}:${station.name}`);
+  const localOffset = (seed % 19) - 9;
   const running = {
-    regular: base,
-    premium: base + gradeOffsets.premium,
-    diesel: base + gradeOffsets.diesel,
+    regular: baselineForGrade("regular", priceSeed) + localOffset,
+    premium: baselineForGrade("premium", priceSeed) + localOffset,
+    diesel: baselineForGrade("diesel", priceSeed) + localOffset,
   };
 
   return days.map((date, index) => {
     const row = { date };
     Object.keys(GRADE_LABELS).forEach((grade) => {
-      const randomStep = seededUnit(seed + hashString(`${date}:${grade}`)) - 0.5;
+      const randomStep = seededUnit(seed + hashString(`${priceSeed.salt}:${date}:${grade}`)) - 0.5;
       const wave = Math.sin(index * 0.82 + (seed % 37)) * 0.9;
       running[grade] = clamp(running[grade] + randomStep * 2.4 + wave, 120, 260);
       row[grade] = roundMoney(running[grade]);
     });
     return row;
   });
+}
+
+function baselineForGrade(grade, priceSeed) {
+  const regular = numericPrice(priceSeed?.baselines?.regular) ?? 168;
+  const offsets = {
+    regular: 0,
+    premium: 13,
+    diesel: -17,
+  };
+  return numericPrice(priceSeed?.baselines?.[grade]) ?? regular + offsets[grade];
+}
+
+function priceSourceLabel(source) {
+  if (source === "imported") return "取込";
+  if (source === "auto") return "自動";
+  return "推定";
 }
 
 async function handlePriceFile(event) {
@@ -969,7 +1044,7 @@ function fuelIcon(movement, isBest, price) {
 function popupHtml(view) {
   const price = view.price === null ? "--" : money(view.price);
   const change = changeText(view.change);
-  const source = view.priceSource === "imported" ? "取込" : "推定";
+  const source = priceSourceLabel(view.priceSource);
   const threePrices = PRICE_GRADES.map(
     (grade) => `
       <div class="popup-price ${grade === state.grade ? "is-active" : ""}">
