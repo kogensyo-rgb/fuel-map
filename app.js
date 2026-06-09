@@ -164,13 +164,6 @@ function hydrateControls() {
 }
 
 function bindEvents() {
-  document.addEventListener("click", (event) => {
-    const mapLink = event.target.closest("a[data-map-url]");
-    if (!mapLink) return;
-    event.preventDefault();
-    openMapLink(mapLink.dataset.mapUrl, mapLink.dataset.fallbackUrl);
-  });
-
   el.locateButton.addEventListener("click", locateUser);
   el.demoButton.addEventListener("click", locateUser);
 
@@ -546,8 +539,6 @@ function setDealCard(button, nameEl, metaEl, view) {
 function setQuickNav(link, view, kind) {
   if (!view) {
     link.href = "#";
-    delete link.dataset.mapUrl;
-    delete link.dataset.fallbackUrl;
     link.removeAttribute("target");
     link.removeAttribute("rel");
     link.setAttribute("aria-disabled", "true");
@@ -1003,63 +994,17 @@ function popupHtml(view) {
 }
 
 function configureMapLink(link, station, kind) {
-  const { primary, fallback } = mapLinkData(station, kind);
-  link.href = primary;
-  link.dataset.mapUrl = primary;
-  link.dataset.fallbackUrl = fallback;
+  link.href = kind === "apple" ? appleMapsUrl(station) : googleMapsUrl(station);
   link.removeAttribute("target");
   link.removeAttribute("rel");
 }
 
 function mapLinkAttrs(station, kind) {
-  const { primary, fallback } = mapLinkData(station, kind);
-  return `href="${escapeHtml(primary)}" data-map-url="${escapeHtml(
-    primary,
-  )}" data-fallback-url="${escapeHtml(fallback)}"`;
+  const href = kind === "apple" ? appleMapsUrl(station) : googleMapsUrl(station);
+  return `href="${escapeHtml(href)}"`;
 }
 
-function mapLinkData(station, kind) {
-  if (kind === "apple") {
-    const primary = isAppleDevice() ? appleMapsAppUrl(station) : appleMapsWebUrl(station);
-    return { primary, fallback: appleMapsWebUrl(station) };
-  }
-
-  const primary = isAndroidDevice()
-    ? googleMapsAndroidUrl(station)
-    : isAppleDevice()
-      ? googleMapsIosUrl(station)
-      : googleMapsWebUrl(station);
-  return { primary, fallback: googleMapsWebUrl(station) };
-}
-
-function openMapLink(primary, fallback) {
-  if (!primary) return;
-
-  const startedAt = Date.now();
-  window.location.href = primary;
-
-  if (!fallback || fallback === primary) return;
-
-  window.setTimeout(() => {
-    if (document.visibilityState === "visible" && Date.now() - startedAt < 1800) {
-      window.location.href = fallback;
-    }
-  }, 900);
-}
-
-function googleMapsIosUrl(station) {
-  const params = new URLSearchParams({
-    daddr: `${station.lat},${station.lng}`,
-    directionsmode: "driving",
-  });
-  return `comgooglemaps://?${params.toString()}`;
-}
-
-function googleMapsAndroidUrl(station) {
-  return `google.navigation:q=${encodeURIComponent(`${station.lat},${station.lng}`)}&mode=d`;
-}
-
-function googleMapsWebUrl(station) {
+function googleMapsUrl(station) {
   const destination = `${station.lat},${station.lng}`;
   const params = new URLSearchParams({
     api: "1",
@@ -1071,17 +1016,7 @@ function googleMapsWebUrl(station) {
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-function appleMapsAppUrl(station) {
-  const destination = `${station.lat},${station.lng}`;
-  const params = new URLSearchParams({
-    daddr: destination,
-    q: station.name,
-    dirflg: "d",
-  });
-  return `maps://?${params.toString()}`;
-}
-
-function appleMapsWebUrl(station) {
+function appleMapsUrl(station) {
   const destination = `${station.lat},${station.lng}`;
   const params = new URLSearchParams({
     daddr: destination,
@@ -1089,16 +1024,6 @@ function appleMapsWebUrl(station) {
     dirflg: "d",
   });
   return `https://maps.apple.com/?${params.toString()}`;
-}
-
-function isAppleDevice() {
-  const platform = navigator.platform || "";
-  const userAgent = navigator.userAgent || "";
-  return /iPad|iPhone|iPod|Macintosh/.test(platform) || /iPad|iPhone|iPod|Mac OS X/.test(userAgent);
-}
-
-function isAndroidDevice() {
-  return /Android/.test(navigator.userAgent || "");
 }
 
 function setStatus(message) {
