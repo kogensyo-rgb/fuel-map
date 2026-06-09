@@ -539,12 +539,15 @@ function setDealCard(button, nameEl, metaEl, view) {
 function setQuickNav(link, view, urlBuilder) {
   if (!view) {
     link.href = "#";
+    link.removeAttribute("target");
+    link.removeAttribute("rel");
     link.setAttribute("aria-disabled", "true");
     link.classList.add("is-disabled");
     return;
   }
 
   link.href = urlBuilder(view.station);
+  link.target = "_self";
   link.removeAttribute("aria-disabled");
   link.classList.remove("is-disabled");
 }
@@ -626,11 +629,15 @@ function renderList() {
             </span>
           </button>
           <nav class="nav-links" aria-label="${escapeHtml(view.station.name)} へのナビ">
-            <a href="${googleMapsUrl(view.station)}" target="_blank" rel="noopener">
+            <a class="nav-start" href="${defaultNavUrl(view.station)}">
+              <i data-lucide="route"></i>
+              ナビ開始
+            </a>
+            <a href="${googleMapsUrl(view.station)}">
               <i data-lucide="navigation"></i>
               Google
             </a>
-            <a href="${appleMapsUrl(view.station)}" target="_blank" rel="noopener">
+            <a href="${appleMapsUrl(view.station)}">
               <i data-lucide="map"></i>
               Apple
             </a>
@@ -984,18 +991,23 @@ function popupHtml(view) {
       <div class="popup-row"><span>距離</span><b>${distanceLabel(view.station.distance)}</b></div>
       <div class="popup-row"><span>ソース</span><b>${source}</b></div>
       <div class="popup-actions">
-        <a href="${googleMapsUrl(view.station)}" target="_blank" rel="noopener">Google ナビ</a>
-        <a href="${appleMapsUrl(view.station)}" target="_blank" rel="noopener">Apple ナビ</a>
+        <a class="nav-start" href="${defaultNavUrl(view.station)}">ナビ開始</a>
+        <a href="${googleMapsUrl(view.station)}">Google</a>
+        <a href="${appleMapsUrl(view.station)}">Apple</a>
       </div>
     </div>
   `;
+}
+
+function defaultNavUrl(station) {
+  if (isAppleDevice()) return appleMapsUrl(station);
+  return googleMapsUrl(station);
 }
 
 function googleMapsUrl(station) {
   const destination = `${station.lat},${station.lng}`;
   const params = new URLSearchParams({
     api: "1",
-    origin: "Current Location",
     destination,
     travelmode: "driving",
     dir_action: "navigate",
@@ -1007,11 +1019,17 @@ function googleMapsUrl(station) {
 function appleMapsUrl(station) {
   const destination = `${station.lat},${station.lng}`;
   const params = new URLSearchParams({
-    saddr: "Current Location",
     daddr: destination,
+    q: station.name,
     dirflg: "d",
   });
   return `https://maps.apple.com/?${params.toString()}`;
+}
+
+function isAppleDevice() {
+  const platform = navigator.platform || "";
+  const userAgent = navigator.userAgent || "";
+  return /iPad|iPhone|iPod|Macintosh/.test(platform) || /iPad|iPhone|iPod|Mac OS X/.test(userAgent);
 }
 
 function setStatus(message) {

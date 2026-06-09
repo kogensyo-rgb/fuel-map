@@ -554,6 +554,21 @@ h1 {
   background: #eef6ef;
 }
 
+.nav-links .nav-start,
+.popup-actions .nav-start {
+  grid-column: 1 / -1;
+  min-height: 42px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.nav-links .nav-start:hover,
+.popup-actions .nav-start:hover {
+  border-color: var(--accent-dark);
+  background: var(--accent-dark);
+}
+
 .nav-links svg {
   width: 15px;
   height: 15px;
