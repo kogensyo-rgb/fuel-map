@@ -37,7 +37,6 @@ let map;
 let homeMarker;
 let baseLayer;
 let baseLayerType = "";
-let tileFallbackArmed = false;
 let rangeCircle;
 let stationLayer;
 let stationMarkers = new Map();
@@ -386,7 +385,7 @@ async function refreshStations() {
   }
 
   state.selectedStationId = null;
-  setStatus("安定モードで表示中");
+  setStatus("軽量道路マップで表示中");
   updateHomeMarker();
   updateBaseLayer();
   map.setView([state.home.lat, state.home.lng], radiusToZoom(state.radius), { animate: false });
@@ -928,14 +927,32 @@ function updateRangeCircle() {
 }
 
 function updateBaseLayer() {
-  if (baseLayer) {
+  const mapEl = document.getElementById("map");
+  if (baseLayer && baseLayerType === "roads") return;
+  if (baseLayer) baseLayer.remove();
+
+  mapEl?.classList.remove("map-lite");
+  baseLayerType = "roads";
+  baseLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
+    subdomains: "abcd",
+    maxZoom: 19,
+    maxNativeZoom: 19,
+    detectRetina: true,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: 2,
+    attribution: "&copy; OpenStreetMap &copy; CARTO",
+  });
+
+  baseLayer.on("tileerror", () => {
+    if (baseLayerType !== "roads") return;
+    baseLayerType = "lite";
     baseLayer.remove();
     baseLayer = null;
-  }
-
-  baseLayerType = "lite";
-  tileFallbackArmed = false;
-  document.getElementById("map")?.classList.add("map-lite");
+    mapEl?.classList.add("map-lite");
+    setStatus("軽量簡易マップで表示中");
+  });
+  baseLayer.addTo(map);
 }
 
 function isInJapan(lat, lng) {
