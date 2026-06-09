@@ -1,9 +1,4 @@
 const STORAGE_KEY = "nearby-fuel-map-local-v4";
-const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-];
-const OVERPASS_TIMEOUT_MS = 3500;
 
 const DEFAULT_VIEW = {
   lat: 0,
@@ -46,7 +41,6 @@ let tileFallbackArmed = false;
 let rangeCircle;
 let stationLayer;
 let stationMarkers = new Map();
-let fetchToken = 0;
 
 const days = makeDateRange(14);
 
@@ -391,95 +385,13 @@ async function refreshStations() {
     return;
   }
 
-  const currentToken = ++fetchToken;
   state.selectedStationId = null;
-  setStatus("軽量リストを表示中...");
+  setStatus("安定モードで表示中");
   updateHomeMarker();
   updateBaseLayer();
   map.setView([state.home.lat, state.home.lng], radiusToZoom(state.radius), { animate: false });
   state.stations = makeFallbackStations(state.home, state.radius);
   renderAll();
-
-  try {
-    const stations = await loadFuelStations(state.home, state.radius);
-    if (currentToken !== fetchToken) return;
-
-    if (stations.length > 0) {
-      state.stations = stations;
-      setStatus(`${stations.length} 件のスタンドを表示中`);
-      renderAll();
-    } else {
-      setStatus("軽量リストを表示中");
-    }
-  } catch {
-    if (currentToken !== fetchToken) return;
-    setStatus("通信が遅いため軽量リストを表示中");
-  }
-}
-
-async function loadFuelStations(home, radius) {
-  const query = `
-    [out:json][timeout:8];
-    (
-      nwr["amenity"="fuel"](around:${Math.round(radius)},${home.lat},${home.lng});
-    );
-    out center tags;
-  `;
-
-  let lastError;
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), OVERPASS_TIMEOUT_MS);
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        signal: controller.signal,
-        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-        body: `data=${encodeURIComponent(query)}`,
-      });
-      if (!response.ok) throw new Error(`Overpass ${response.status}`);
-      const data = await response.json();
-      return normalizeStations(data.elements || [], home);
-    } catch (error) {
-      lastError = error;
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  }
-  throw lastError;
-}
-
-function normalizeStations(elements, home) {
-  const seen = new Set();
-  return elements
-    .map((item) => {
-      const lat = Number(item.lat ?? item.center?.lat);
-      const lng = Number(item.lon ?? item.center?.lon);
-      if (!validCoords(lat, lng)) return null;
-
-      const tags = item.tags || {};
-      const id = `${item.type}:${item.id}`;
-      if (seen.has(id)) return null;
-      seen.add(id);
-
-      const name = tags["name:ja"] || tags.name || tags.brand || "ガソリンスタンド";
-      const brand = tags.brand && tags.brand !== name ? tags.brand : "";
-      const address = formatAddress(tags);
-
-      return {
-        id,
-        name,
-        brand,
-        address,
-        lat,
-        lng,
-        distance: distanceKm(home.lat, home.lng, lat, lng),
-        source: "osm",
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, 40);
 }
 
 function makeFallbackStations(home, radius = 2000) {
@@ -1212,11 +1124,6 @@ function offsetCoordinate(lat, lng, northMeters, eastMeters) {
   const latOffset = northMeters / 111320;
   const lngOffset = eastMeters / (111320 * Math.cos(toRadians(lat)));
   return { lat: lat + latOffset, lng: lng + lngOffset };
-}
-
-function formatAddress(tags) {
-  const street = [tags["addr:housenumber"], tags["addr:street"]].filter(Boolean).join(" ");
-  return [street, tags["addr:city"], tags["addr:state"]].filter(Boolean).join(", ");
 }
 
 function normalizeName(name) {
