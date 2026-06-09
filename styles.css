@@ -891,7 +891,7 @@ h1 {
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(300px, 46vh) minmax(360px, 54vh);
+    grid-template-rows: minmax(260px, 36vh) minmax(420px, 64vh);
   }
 
   .map-stage {
@@ -910,33 +910,33 @@ h1 {
   }
 
   .home-block {
-    order: 3;
-  }
-
-  .metric-grid {
     order: 4;
   }
 
-  .deal-panel {
+  .metric-grid {
     order: 5;
   }
 
-  .quick-nav-panel {
+  .deal-panel {
     order: 6;
   }
 
-  .station-panel {
-    order: 2;
-  }
-
-  .search-block {
+  .quick-nav-panel {
     order: 7;
   }
 
   .station-panel {
-    flex: 0 0 340px;
+    order: 3;
+  }
+
+  .search-block {
+    order: 2;
+  }
+
+  .station-panel {
+    flex: 0 0 320px;
     min-height: 0;
-    max-height: 340px;
+    max-height: 320px;
   }
 
   .map-toolbar {
@@ -967,11 +967,14 @@ h1 {
   }
 
   .location-grid,
-  .field-row,
   .button-row,
   .metric-grid,
   .deal-panel {
     grid-template-columns: 1fr;
+  }
+
+  .search-block .field-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .metric {
