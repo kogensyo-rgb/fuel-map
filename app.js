@@ -619,6 +619,7 @@ function stationsWithinRadius(home, radius, stations) {
       const lat = Number(station.lat);
       const lng = Number(station.lng);
       if (!validCoords(lat, lng) || !station.id || !station.name) return null;
+      if (!isCachedLiquidFuelStation(station)) return null;
       const distance = distanceKm(home.lat, home.lng, lat, lng);
       if (distance * 1000 > radius + 60) return null;
       return {
@@ -656,6 +657,11 @@ function stationCompleteness(station) {
     station.addressQuality === "番地あり" || station.addressQuality === "登録住所",
     station.osmRef,
   ].filter(Boolean).length;
+}
+
+function isCachedLiquidFuelStation(station) {
+  const text = [station.name, station.brand, station.address].filter(Boolean).join(" ");
+  return !/astomos|オートガス|auto gas|lpg|lpガス|lp gas|cng|天然ガス|水素|hydrogen|h2/i.test(text);
 }
 
 async function fetchNominatimStations(home, radius, mode) {
@@ -871,13 +877,15 @@ function isUsableFuelResult(item) {
   const hasLiquidFuel = fuelKeys.some((key) =>
     /diesel|octane|gasoline|petrol|e10|e85|biodiesel/.test(key),
   );
-  const lpgOnly =
-    /astomos|オートガス|auto gas|lpg|lpガス|lp gas/i.test(nameText) ||
-    (truthyTag(tags["fuel:lpg"]) &&
-      !hasLiquidFuel &&
-      (truthyTag(tags.industrial) || /ガス|gas/i.test(nameText)));
+  const alternativeFuelOnly =
+    !hasLiquidFuel &&
+    (truthyTag(tags["fuel:lpg"]) ||
+      truthyTag(tags["fuel:cng"]) ||
+      truthyTag(tags["fuel:hydrogen"]) ||
+      truthyTag(tags["fuel:electricity"]) ||
+      /astomos|オートガス|auto gas|lpg|lpガス|lp gas|cng|天然ガス|水素|hydrogen|h2/i.test(nameText));
 
-  return !lpgOnly;
+  return !alternativeFuelOnly;
 }
 
 function looksLikeStationName(value, brand = "", operator = "") {
