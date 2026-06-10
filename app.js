@@ -139,10 +139,17 @@ function cacheElements() {
     "statusPill",
     "dateRange",
     "dateLabel",
+    "hudDate",
+    "hudStationMetric",
+    "hudLowMetric",
+    "dockRegularPrice",
+    "dockPremiumPrice",
+    "dockDieselPrice",
     "sourceBadge",
   ].forEach((id) => {
     el[id] = document.getElementById(id);
   });
+  el.resourceNodes = [...document.querySelectorAll(".resource-node[data-grade]")];
 }
 
 function restoreState() {
@@ -286,9 +293,7 @@ function bindEvents() {
   });
 
   el.gradeInput.addEventListener("change", () => {
-    state.grade = el.gradeInput.value;
-    saveState();
-    renderAll();
+    setGrade(el.gradeInput.value);
   });
 
   el.sortInput.addEventListener("change", () => {
@@ -318,6 +323,10 @@ function bindEvents() {
     if (stationId) selectStation(stationId, true);
   });
 
+  el.resourceNodes.forEach((button) => {
+    button.addEventListener("click", () => setGrade(button.dataset.grade));
+  });
+
   el.stationList.addEventListener("click", (event) => {
     const locateAction = event.target.closest("[data-action='locate']");
     if (locateAction) {
@@ -330,6 +339,14 @@ function bindEvents() {
     if (!card) return;
     selectStation(card.dataset.stationId, true);
   });
+}
+
+function setGrade(grade) {
+  if (!GRADE_LABELS[grade]) return;
+  state.grade = grade;
+  el.gradeInput.value = grade;
+  saveState();
+  renderAll();
 }
 
 function readControls() {
@@ -710,6 +727,7 @@ function renderAll() {
   renderMetrics();
   renderMarkers();
   renderList();
+  renderGradeDock();
   if (window.lucide) {
     window.lucide.createIcons();
   }
@@ -718,6 +736,7 @@ function renderAll() {
 function renderDateControl() {
   const date = days[state.selectedDateIndex] || days[days.length - 1];
   el.dateLabel.textContent = displayDate(date);
+  if (el.hudDate) el.hudDate.textContent = displayDate(date);
   el.dateRange.value = String(state.selectedDateIndex);
 }
 
@@ -738,6 +757,7 @@ function renderMetrics() {
     el.avgMetric.textContent = "--";
     el.lowMetric.textContent = "--";
     el.nearCheapMetric.textContent = "--";
+    if (el.hudLowMetric) el.hudLowMetric.textContent = "--";
     renderDealCards(null, null);
     return;
   }
@@ -745,8 +765,29 @@ function renderMetrics() {
   const avg = priced.reduce((sum, view) => sum + view.price, 0) / priced.length;
   el.avgMetric.textContent = money(avg);
   el.lowMetric.textContent = money(summary.cheapest.price);
+  if (el.hudLowMetric) el.hudLowMetric.textContent = money(summary.cheapest.price);
   el.nearCheapMetric.textContent = money(summary.nearCheap.price);
   renderDealCards(summary.cheapest, summary.nearCheap);
+}
+
+function renderGradeDock() {
+  const views = getStationViews();
+  const lows = {};
+
+  PRICE_GRADES.forEach((grade) => {
+    const prices = views
+      .map((view) => view.prices[grade])
+      .filter((price) => price !== null && !Number.isNaN(price));
+    lows[grade] = prices.length > 0 ? Math.min(...prices) : null;
+  });
+
+  if (el.dockRegularPrice) el.dockRegularPrice.textContent = lows.regular === null ? "--" : money(lows.regular);
+  if (el.dockPremiumPrice) el.dockPremiumPrice.textContent = lows.premium === null ? "--" : money(lows.premium);
+  if (el.dockDieselPrice) el.dockDieselPrice.textContent = lows.diesel === null ? "--" : money(lows.diesel);
+
+  el.resourceNodes.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.grade === state.grade);
+  });
 }
 
 function renderDealCards(cheapest, nearCheap) {
@@ -829,6 +870,7 @@ function renderMarkers() {
 function renderList() {
   const views = sortViews(getStationViews());
   el.stationCount.textContent = String(views.length);
+  if (el.hudStationMetric) el.hudStationMetric.textContent = `${views.length} ST`;
 
   if (views.length === 0) {
     const message =

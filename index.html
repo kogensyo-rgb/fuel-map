@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>近くのガソリン価格マップ</title>
     <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260610-coordinate-first" />
+    <link rel="stylesheet" href="./styles.css?v=20260610-v2-frost" />
   </head>
-  <body>
+  <body class="game-v2">
     <div class="app-shell">
       <aside class="control-panel" aria-label="ガソリン価格コントロール">
         <header class="brand">
@@ -181,6 +181,26 @@
       <main class="map-stage">
         <div id="map" aria-label="近くのガソリンスタンド地図"></div>
 
+        <section class="game-hud" aria-label="燃料マップ情報">
+          <div class="hud-title-block">
+            <strong>FROST FUEL MAP</strong>
+            <span>近くの燃料拠点</span>
+          </div>
+          <div class="hud-stat">
+            <i data-lucide="calendar-days"></i>
+            <span id="hudDate">--</span>
+          </div>
+          <div class="hud-temp">-8.0°C</div>
+          <div class="hud-stat">
+            <i data-lucide="fuel"></i>
+            <span id="hudStationMetric">0</span>
+          </div>
+          <div class="hud-stat">
+            <i data-lucide="japanese-yen"></i>
+            <span id="hudLowMetric">--</span>
+          </div>
+        </section>
+
         <div class="map-toolbar">
           <div id="statusPill" class="status-pill">
             <i data-lucide="radar"></i>
@@ -198,11 +218,29 @@
           <span><b class="legend-dot up"></b>値上げ</span>
           <span><b class="legend-dot missing"></b>データなし</span>
         </div>
+
+        <section class="resource-dock" aria-label="油種を選ぶ">
+          <button class="resource-node is-active" type="button" data-grade="regular">
+            <span class="resource-icon regular"><i data-lucide="fuel"></i></span>
+            <strong>レギュラー</strong>
+            <em id="dockRegularPrice">--</em>
+          </button>
+          <button class="resource-node" type="button" data-grade="premium">
+            <span class="resource-icon premium"><i data-lucide="gauge"></i></span>
+            <strong>ハイオク</strong>
+            <em id="dockPremiumPrice">--</em>
+          </button>
+          <button class="resource-node" type="button" data-grade="diesel">
+            <span class="resource-icon diesel"><i data-lucide="truck"></i></span>
+            <strong>軽油</strong>
+            <em id="dockDieselPrice">--</em>
+          </button>
+        </section>
       </main>
     </div>
 
     <script src="./vendor/leaflet/leaflet.js"></script>
     <script src="./vendor/lucide/lucide.min.js"></script>
-    <script src="./app.js?v=20260610-coordinate-first"></script>
+    <script src="./app.js?v=20260610-v2-frost"></script>
   </body>
 </html>
