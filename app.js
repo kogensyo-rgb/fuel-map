@@ -13,20 +13,9 @@ const GRADE_LABELS = {
 };
 const PRICE_GRADES = ["regular", "premium", "diesel"];
 const NEAR_CHEAP_DELTA = 3;
-const STATION_LIMIT = 40;
+const STATION_LIMIT = 24;
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 const TILE_PROVIDERS = [
-  {
-    id: "osm",
-    label: "OpenStreetMap",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    options: {
-      subdomains: "abc",
-      maxZoom: 19,
-      maxNativeZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
-    },
-  },
   {
     id: "carto-light",
     label: "CARTO Light",
@@ -47,6 +36,17 @@ const TILE_PROVIDERS = [
       maxZoom: 19,
       maxNativeZoom: 19,
       attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+    },
+  },
+  {
+    id: "osm",
+    label: "OpenStreetMap",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    options: {
+      subdomains: "abc",
+      maxZoom: 19,
+      maxNativeZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors",
     },
   },
 ];
@@ -272,11 +272,11 @@ function defaultPriceSeed() {
 }
 
 function bindEvents() {
-  el.locateButton.addEventListener("click", locateUser);
-  el.demoButton.addEventListener("click", locateUser);
+  el.locateButton?.addEventListener("click", locateUser);
+  el.demoButton?.addEventListener("click", locateUser);
   el.mapLocateButton?.addEventListener("click", locateUser);
 
-  el.refreshButton.addEventListener("click", () => {
+  el.refreshButton?.addEventListener("click", () => {
     if (readControls()) refreshStations();
   });
 
@@ -314,13 +314,13 @@ function bindEvents() {
     renderAll();
   });
 
-  el.priceFile.addEventListener("change", handlePriceFile);
-  el.templateButton.addEventListener("click", downloadTemplate);
-  el.cheapestButton.addEventListener("click", () => {
+  el.priceFile?.addEventListener("change", handlePriceFile);
+  el.templateButton?.addEventListener("click", downloadTemplate);
+  el.cheapestButton?.addEventListener("click", () => {
     const stationId = el.cheapestButton.dataset.stationId || state.cheapestStationId;
     if (stationId) selectStation(stationId, true);
   });
-  el.nearCheapButton.addEventListener("click", () => {
+  el.nearCheapButton?.addEventListener("click", () => {
     const stationId = el.nearCheapButton.dataset.stationId || state.nearCheapStationId;
     if (stationId) selectStation(stationId, true);
   });
@@ -576,14 +576,15 @@ function normalizeNominatimStation(item, home, radius) {
     extratags.operator ||
     namedetails.operator ||
     "";
+  const detailedName = namedetails["name:ja"] || namedetails.name || "";
+  const itemName = looksLikeStationName(item.name, brand, operator) ? item.name : "";
+  const safeDetailedName = looksLikeStationName(detailedName, brand, operator) ? detailedName : "";
   const name =
-    namedetails["name:ja"] ||
-    namedetails.name ||
-    item.name ||
+    safeDetailedName ||
+    itemName ||
     brand ||
     operator ||
-    displayParts[0] ||
-    "ガソリンスタンド";
+    "名称未登録の給油所";
   const branch = extratags["branch:ja"] || extratags.branch || "";
   const displayName =
     branch && !name.includes(branch) && !normalizeName(name).includes(normalizeName(branch))
@@ -648,6 +649,20 @@ function isUsableFuelResult(item) {
       (truthyTag(tags.industrial) || /ガス|gas/i.test(nameText)));
 
   return !lpgOnly;
+}
+
+function looksLikeStationName(value, brand = "", operator = "") {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  if (brand && normalizeName(text) === normalizeName(brand)) return true;
+  if (operator && normalizeName(text) === normalizeName(operator)) return true;
+  if (/eneos|cosmo|mobil|shell|apollo|idemitsu|esso|出光|エネオス|コスモ|モービル|シェル|石油|給油|ガソリン|セルフ|ss/i.test(text)) {
+    return true;
+  }
+  if (/[通町区市府県郡村]$|丁目$|交差点$|道路$|street$|road$/i.test(text)) {
+    return false;
+  }
+  return true;
 }
 
 function truthyTag(value) {
@@ -811,6 +826,7 @@ function renderDealCards(cheapest, nearCheap) {
 }
 
 function setDealCard(button, nameEl, metaEl, view) {
+  if (!button || !nameEl || !metaEl) return;
   if (!view) {
     button.disabled = true;
     delete button.dataset.stationId;
@@ -828,6 +844,7 @@ function setDealCard(button, nameEl, metaEl, view) {
 }
 
 function setQuickNav(link, view, kind) {
+  if (!link) return;
   if (!view) {
     link.href = "#";
     link.removeAttribute("target");
@@ -907,11 +924,16 @@ function renderList() {
     .map((view) => {
       const selected = view.station.id === state.selectedStationId ? " is-selected" : "";
       const price = view.price === null ? "--" : money(view.price);
-      const source = priceSourceLabel(view.priceSource);
       const brand = view.station.brand ? `<span>${escapeHtml(view.station.brand)}</span>` : "";
       const address = view.station.address
         ? `<span class="station-address">${escapeHtml(view.station.address)}</span>`
         : "";
+      const stationName = `
+        <span class="station-name-row">
+          <span class="station-label">給油所名</span>
+          <span class="station-name">${escapeHtml(view.station.name)}</span>
+        </span>
+      `;
       const addressMeta = `
         <span class="station-location-meta">
           <span>${escapeHtml(view.station.addressQuality || "地図登録住所")}</span>
@@ -926,11 +948,10 @@ function renderList() {
         )}">
           <button class="station-pick" type="button" title="このスタンドを見る">
             <span class="station-main">
-              <span class="station-name">${escapeHtml(view.station.name)}</span>
+              ${stationName}
               <span class="station-meta">
                 <span>${distanceLabel(view.station.distance)}</span>
                 ${brand}
-                <span>${source}</span>
               </span>
               ${address}
               ${addressMeta}
@@ -1305,7 +1326,7 @@ function addTileProvider(providerIndex, mapEl) {
       setStatus(
         state.stationFetchStatus === "loading"
           ? state.stationFetchMessage
-          : `${provider.label} で道路地図を表示中`,
+          : "道路地図を表示中",
       );
     }
   });
@@ -1344,7 +1365,6 @@ function fuelIcon(movement, isBest, price) {
 function popupHtml(view) {
   const price = view.price === null ? "--" : money(view.price);
   const change = changeText(view.change);
-  const source = priceSourceLabel(view.priceSource);
   const threePrices = PRICE_GRADES.map(
     (grade) => `
       <div class="popup-price ${grade === state.grade ? "is-active" : ""}">
@@ -1355,8 +1375,11 @@ function popupHtml(view) {
   ).join("");
   return `
     <div class="popup">
-      <strong>${escapeHtml(view.station.name)}</strong>
+      <strong><span>給油所名</span>${escapeHtml(view.station.name)}</strong>
       <div class="popup-prices">${threePrices}</div>
+      <div class="popup-row"><span>ナビ先</span><b>${escapeHtml(view.station.name)} · ${escapeHtml(
+        view.station.coordinateLabel || "--",
+      )}</b></div>
       <div class="popup-row"><span>所在地</span><b>${escapeHtml(view.station.address || "--")}</b></div>
       <div class="popup-row"><span>住所扱い</span><b>${escapeHtml(view.station.addressQuality || "--")} · ${escapeHtml(
         view.station.addressNote || "位置は座標優先",
@@ -1364,7 +1387,6 @@ function popupHtml(view) {
       <div class="popup-row"><span>座標</span><b>${escapeHtml(view.station.coordinateLabel || "--")}</b></div>
       <div class="popup-row"><span>前日比</span><b>${change}</b></div>
       <div class="popup-row"><span>距離</span><b>${distanceLabel(view.station.distance)}</b></div>
-      <div class="popup-row"><span>ソース</span><b>${source}</b></div>
       ${
         view.station.osmRef
           ? `<div class="popup-row"><span>OSM</span><b>${escapeHtml(view.station.osmRef)}</b></div>`

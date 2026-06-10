@@ -2152,3 +2152,285 @@ h1 {
     padding-inline: 4px;
   }
 }
+
+/* 3.0 simple mode */
+.game-v2 .game-hud,
+.game-v2 .legend,
+.game-v2 .date-slider,
+.game-v2 .home-block,
+.game-v2 .deal-panel,
+.game-v2 .quick-nav-panel {
+  display: none !important;
+}
+
+.game-v2 .app-shell {
+  grid-template-columns: minmax(310px, 360px) minmax(0, 1fr);
+  background: #f4faf9;
+}
+
+.game-v2 .map-stage::before,
+.game-v2 .map-stage::after {
+  display: none;
+}
+
+.game-v2 .control-panel {
+  gap: 10px;
+  padding: 14px;
+  border-right-color: rgba(129, 177, 205, 0.28);
+  background: rgba(250, 254, 253, 0.96);
+  box-shadow: none;
+}
+
+.game-v2 .brand {
+  min-height: 48px;
+}
+
+.game-v2 .brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.game-v2 h1 {
+  font-size: 21px;
+}
+
+.game-v2 .tool-block,
+.game-v2 .metric-grid,
+.game-v2 .station-panel,
+.game-v2 .station-card {
+  border-color: rgba(129, 177, 205, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: none;
+}
+
+.game-v2 .search-block {
+  padding: 11px;
+}
+
+.game-v2 .search-block .section-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.game-v2 .badge {
+  min-height: 20px;
+  padding: 1px 7px;
+  font-size: 10px;
+}
+
+.game-v2 button,
+.game-v2 .button-like {
+  box-shadow: none;
+  transition: none;
+}
+
+.game-v2 button:hover,
+.game-v2 .button-like:hover {
+  box-shadow: none;
+}
+
+.game-v2 .metric {
+  padding: 10px;
+}
+
+.game-v2 .metric strong {
+  font-size: 18px;
+}
+
+.game-v2 .station-panel {
+  min-height: 0;
+  padding: 11px;
+}
+
+.game-v2 .station-list {
+  gap: 8px;
+}
+
+.game-v2 .station-card {
+  gap: 0;
+}
+
+.game-v2 .station-pick {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px 10px 4px;
+}
+
+.game-v2 .station-name-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+
+.game-v2 .station-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(54, 168, 224, 0.12);
+  color: #167eb5;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.game-v2 .station-name {
+  font-size: 15px;
+}
+
+.game-v2 .station-location-meta span {
+  border-radius: 6px;
+}
+
+.game-v2 .price-strip {
+  margin-top: 7px;
+}
+
+.game-v2 .nav-links {
+  padding: 0 10px 10px;
+}
+
+.game-v2 .nav-links a {
+  min-height: 36px;
+}
+
+.game-v2 .map-toolbar {
+  top: 12px;
+  right: auto;
+  left: 12px;
+  width: min(460px, calc(100% - 24px));
+}
+
+.game-v2 .status-pill {
+  max-width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  box-shadow: none;
+}
+
+.game-v2 .map-locate-button {
+  top: 60px;
+  left: 12px;
+  min-height: 38px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.game-v2 .resource-dock {
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.game-v2 .resource-node {
+  min-height: 70px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.game-v2 .resource-node.is-active {
+  box-shadow: 0 0 0 2px rgba(83, 191, 239, 0.2);
+}
+
+.game-v2 .fuel-marker {
+  box-shadow: 0 4px 10px rgba(45, 91, 118, 0.18);
+}
+
+.game-v2 .leaflet-popup-content-wrapper,
+.game-v2 .leaflet-popup-tip {
+  box-shadow: 0 10px 24px rgba(45, 91, 118, 0.18);
+}
+
+.game-v2 .popup strong {
+  display: grid;
+  gap: 4px;
+}
+
+.game-v2 .popup strong span {
+  color: #167eb5;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  .game-v2 .app-shell {
+    display: block;
+  }
+
+  .game-v2 .brand,
+  .game-v2 .metric-grid {
+    display: none;
+  }
+
+  .game-v2 .control-panel {
+    right: 8px;
+    bottom: 110px;
+    left: 8px;
+    max-height: 42vh;
+    padding: 9px;
+    border-radius: 8px;
+  }
+
+  .game-v2 .map-toolbar {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+  }
+
+  .game-v2 .map-locate-button {
+    top: 58px;
+    left: 10px;
+  }
+
+  .game-v2 .station-panel {
+    min-height: 210px;
+  }
+
+  .game-v2 .resource-dock {
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .game-v2 .resource-node {
+    min-height: 72px;
+    grid-template-rows: 30px auto auto;
+    padding: 6px 4px;
+  }
+
+  .game-v2 .resource-icon {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-v2 .control-panel {
+    bottom: 108px;
+    max-height: 43vh;
+  }
+
+  .game-v2 .search-block .field-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .game-v2 .station-name {
+    font-size: 14px;
+  }
+
+  .game-v2 .station-price {
+    min-width: 68px;
+  }
+
+  .game-v2 .price {
+    font-size: 20px;
+  }
+}

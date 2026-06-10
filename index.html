@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>近くのガソリン価格マップ</title>
     <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260610-mobile-locate" />
+    <link rel="stylesheet" href="./styles.css?v=20260610-simple-v3" />
   </head>
   <body class="game-v2">
     <div class="app-shell">
@@ -15,52 +15,24 @@
             <i data-lucide="fuel"></i>
           </div>
           <div>
-            <p class="eyebrow">Nearby fuel finder</p>
-            <h1>近くのガソリンスタンド</h1>
+            <p class="eyebrow">Nearby fuel</p>
+            <h1>ガソリン価格マップ</h1>
           </div>
         </header>
 
-        <section class="tool-block home-block">
-          <div class="section-title">
-            <span>現在地</span>
-            <span id="sourceBadge" class="badge">推定価格</span>
-          </div>
-
-          <label class="field">
-            <span>場所ラベル</span>
-            <input id="addressInput" type="text" value="自宅" autocomplete="street-address" />
-          </label>
-
-          <div class="location-grid">
-            <label class="field">
-              <span>緯度</span>
-              <input id="latInput" type="number" step="0.000001" inputmode="decimal" />
-            </label>
-            <label class="field">
-              <span>経度</span>
-              <input id="lngInput" type="number" step="0.000001" inputmode="decimal" />
-            </label>
-          </div>
-
-          <div class="button-row">
-            <button id="locateButton" class="primary" type="button" title="現在地を使う">
-              <i data-lucide="crosshair"></i>
-              <span>現在地</span>
-            </button>
-            <button id="demoButton" type="button" title="現在地を再取得">
-              <i data-lucide="locate-fixed"></i>
-              <span>再取得</span>
-            </button>
-          </div>
-        </section>
-
         <section class="tool-block search-block">
           <div class="section-title">
-            <span>検索</span>
-            <button id="refreshButton" class="icon-button" type="button" title="スタンドを更新">
-              <i data-lucide="refresh-cw"></i>
-            </button>
+            <span>検索条件</span>
+            <span id="sourceBadge" class="badge">毎日更新</span>
           </div>
+
+          <input id="addressInput" type="hidden" value="現在地" />
+          <input id="latInput" type="hidden" />
+          <input id="lngInput" type="hidden" />
+          <input id="gradeInput" type="hidden" value="regular" />
+          <input id="priceModeInput" type="hidden" value="demo" />
+          <input id="dateRange" type="hidden" min="0" max="13" value="13" />
+          <span id="dateLabel" hidden>--</span>
 
           <div class="field-row">
             <label class="field">
@@ -75,44 +47,13 @@
               </select>
             </label>
             <label class="field">
-              <span>油種</span>
-              <select id="gradeInput">
-                <option value="regular" selected>レギュラー</option>
-                <option value="premium">ハイオク</option>
-                <option value="diesel">軽油</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="field-row">
-            <label class="field">
               <span>並び替え</span>
               <select id="sortInput">
                 <option value="price" selected>最安値</option>
                 <option value="nearCheap">近い安値</option>
-                <option value="drop">値下がり順</option>
                 <option value="distance">距離順</option>
               </select>
             </label>
-            <label class="field">
-              <span>価格ソース</span>
-              <select id="priceModeInput">
-                <option value="demo" selected>自動</option>
-                <option value="imported">インポート</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="button-row">
-            <label class="button-like" for="priceFile" title="価格 JSON をインポート">
-              <i data-lucide="upload"></i>
-              <span>価格を取込</span>
-            </label>
-            <input id="priceFile" class="visually-hidden" type="file" accept="application/json,.json" />
-            <button id="templateButton" type="button" title="テンプレートをダウンロード">
-              <i data-lucide="file-json"></i>
-              <span>テンプレ</span>
-            </button>
           </div>
         </section>
 
@@ -131,44 +72,6 @@
           </div>
         </section>
 
-        <section class="deal-panel" aria-label="おすすめスタンド">
-          <button id="cheapestButton" class="deal-card" type="button">
-            <span>
-              <i data-lucide="japanese-yen"></i>
-              最安値
-            </span>
-            <strong id="cheapestName">--</strong>
-            <em id="cheapestMeta">--</em>
-          </button>
-          <button id="nearCheapButton" class="deal-card" type="button">
-            <span>
-              <i data-lucide="route"></i>
-              近い安値
-            </span>
-            <strong id="nearCheapName">--</strong>
-            <em id="nearCheapMeta">--</em>
-          </button>
-        </section>
-
-        <section class="quick-nav-panel" aria-label="おすすめナビ">
-          <a id="cheapestGoogleLink" href="#">
-            <i data-lucide="navigation"></i>
-            最安 Google マップ
-          </a>
-          <a id="cheapestAppleLink" href="#">
-            <i data-lucide="map"></i>
-            最安 Apple マップ
-          </a>
-          <a id="nearCheapGoogleLink" href="#">
-            <i data-lucide="navigation"></i>
-            近い Google マップ
-          </a>
-          <a id="nearCheapAppleLink" href="#">
-            <i data-lucide="map"></i>
-            近い Apple マップ
-          </a>
-        </section>
-
         <section class="station-panel">
           <div class="section-title">
             <span>スタンド</span>
@@ -181,48 +84,17 @@
       <main class="map-stage">
         <div id="map" aria-label="近くのガソリンスタンド地図"></div>
 
-        <section class="game-hud" aria-label="燃料マップ情報">
-          <div class="hud-title-block">
-            <strong>FUEL BUDDY MAP</strong>
-            <span>近くのガソリン価格</span>
-          </div>
-          <div class="hud-stat">
-            <i data-lucide="calendar-days"></i>
-            <span id="hudDate">--</span>
-          </div>
-          <div class="hud-temp">READY</div>
-          <div class="hud-stat">
-            <i data-lucide="fuel"></i>
-            <span id="hudStationMetric">0</span>
-          </div>
-          <div class="hud-stat">
-            <i data-lucide="japanese-yen"></i>
-            <span id="hudLowMetric">--</span>
-          </div>
-        </section>
-
         <div class="map-toolbar">
           <div id="statusPill" class="status-pill">
             <i data-lucide="radar"></i>
-            <span>準備完了</span>
+            <span>現在地を取得します</span>
           </div>
-          <label class="date-slider">
-            <span id="dateLabel">--</span>
-            <input id="dateRange" type="range" min="0" max="13" value="13" />
-          </label>
         </div>
 
         <button id="mapLocateButton" class="map-locate-button" type="button" title="現在地を使う">
           <i data-lucide="crosshair"></i>
           <span>現在地</span>
         </button>
-
-        <div class="legend" aria-label="価格変動の凡例">
-          <span><b class="legend-dot down"></b>値下げ</span>
-          <span><b class="legend-dot flat"></b>同じ</span>
-          <span><b class="legend-dot up"></b>値上げ</span>
-          <span><b class="legend-dot missing"></b>データなし</span>
-        </div>
 
         <section class="resource-dock" aria-label="油種を選ぶ">
           <button class="resource-node is-active" type="button" data-grade="regular">
@@ -246,6 +118,6 @@
 
     <script src="./vendor/leaflet/leaflet.js"></script>
     <script src="./vendor/lucide/lucide.min.js"></script>
-    <script src="./app.js?v=20260610-mobile-locate"></script>
+    <script src="./app.js?v=20260610-simple-v3"></script>
   </body>
 </html>
