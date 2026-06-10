@@ -114,6 +114,7 @@ function cacheElements() {
     "lngInput",
     "locateButton",
     "demoButton",
+    "mapLocateButton",
     "refreshButton",
     "radiusInput",
     "gradeInput",
@@ -273,6 +274,7 @@ function defaultPriceSeed() {
 function bindEvents() {
   el.locateButton.addEventListener("click", locateUser);
   el.demoButton.addEventListener("click", locateUser);
+  el.mapLocateButton?.addEventListener("click", locateUser);
 
   el.refreshButton.addEventListener("click", () => {
     if (readControls()) refreshStations();
@@ -402,9 +404,11 @@ async function locateUser(options = {}) {
   }
 
   state.hasRequestedLocation = true;
+  setLocateButtonsBusy(true);
   setStatus("現在地を取得しています...");
   navigator.geolocation.getCurrentPosition(
     (position) => {
+      setLocateButtonsBusy(false);
       const accuracy = Number(position.coords.accuracy);
       if (Number.isFinite(accuracy) && accuracy > 10000) {
         state.stations = [];
@@ -423,6 +427,7 @@ async function locateUser(options = {}) {
       refreshStations();
     },
     () => {
+      setLocateButtonsBusy(false);
       state.stations = [];
       renderAll();
       setStatus(
@@ -433,6 +438,13 @@ async function locateUser(options = {}) {
     },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
   );
+}
+
+function setLocateButtonsBusy(isBusy) {
+  [el.locateButton, el.demoButton, el.mapLocateButton].filter(Boolean).forEach((button) => {
+    button.classList.toggle("is-busy", isBusy);
+    button.setAttribute("aria-busy", String(isBusy));
+  });
 }
 
 async function refreshStations() {
@@ -685,20 +697,16 @@ function formatStationAddress(item, displayParts, name) {
     };
   }
 
-  if (locality.length >= 3) {
+  if (locality.length >= 2) {
     return {
       text: locality.join(" "),
       quality: "所在地目安",
-      note: "位置は座標優先",
+      note: "詳細住所未登録・座標でナビ",
     };
   }
 
   return {
-    text:
-      displayParts
-        .filter((part) => part && part !== name && part !== "日本")
-        .slice(-3)
-        .join(" ") || "住所未登録",
+    text: "住所未登録",
     quality: "座標のみ",
     note: "位置は座標優先",
   };
@@ -1372,13 +1380,13 @@ function popupHtml(view) {
 
 function configureMapLink(link, station, kind) {
   link.href = kind === "apple" ? appleMapsUrl(station) : googleMapsUrl(station);
-  link.removeAttribute("target");
-  link.removeAttribute("rel");
+  link.target = "_blank";
+  link.rel = "noopener";
 }
 
 function mapLinkAttrs(station, kind) {
   const href = kind === "apple" ? appleMapsUrl(station) : googleMapsUrl(station);
-  return `href="${escapeHtml(href)}"`;
+  return `href="${escapeHtml(href)}" target="_blank" rel="noopener"`;
 }
 
 function googleMapsUrl(station) {
@@ -1397,7 +1405,6 @@ function appleMapsUrl(station) {
   const destination = `${station.lat},${station.lng}`;
   const params = new URLSearchParams({
     daddr: destination,
-    q: station.name,
     dirflg: "d",
   });
   return `https://maps.apple.com/?${params.toString()}`;

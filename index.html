@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>近くのガソリン価格マップ</title>
     <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260610-cute-v2" />
+    <link rel="stylesheet" href="./styles.css?v=20260610-mobile-locate" />
   </head>
   <body class="game-v2">
     <div class="app-shell">
@@ -212,6 +212,11 @@
           </label>
         </div>
 
+        <button id="mapLocateButton" class="map-locate-button" type="button" title="現在地を使う">
+          <i data-lucide="crosshair"></i>
+          <span>現在地</span>
+        </button>
+
         <div class="legend" aria-label="価格変動の凡例">
           <span><b class="legend-dot down"></b>値下げ</span>
           <span><b class="legend-dot flat"></b>同じ</span>
@@ -241,6 +246,6 @@
 
     <script src="./vendor/leaflet/leaflet.js"></script>
     <script src="./vendor/lucide/lucide.min.js"></script>
-    <script src="./app.js?v=20260610-cute-v2"></script>
+    <script src="./app.js?v=20260610-mobile-locate"></script>
   </body>
 </html>

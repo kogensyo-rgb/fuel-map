@@ -2054,3 +2054,101 @@ h1 {
   background: rgba(255, 255, 255, 0.78);
   color: #5d7482;
 }
+
+/* 2.2 Mobile locate and navigation polish */
+.game-v2 .map-locate-button {
+  position: absolute;
+  z-index: 690;
+  top: 118px;
+  left: 392px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(76, 164, 215, 0.42);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(229, 247, 255, 0.95)),
+    rgba(255, 255, 255, 0.96);
+  color: #166f9f;
+  font-weight: 800;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 12px 28px rgba(35, 91, 126, 0.18);
+}
+
+.game-v2 .map-locate-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.game-v2 .map-locate-button.is-busy,
+.game-v2 #locateButton.is-busy,
+.game-v2 #demoButton.is-busy {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+@media (max-width: 900px) {
+  .game-v2 .map-locate-button {
+    top: 118px;
+    left: 12px;
+    min-height: 40px;
+    padding-inline: 12px;
+  }
+
+  .game-v2 .control-panel {
+    bottom: 118px;
+    max-height: 43vh;
+    border-radius: 12px;
+  }
+
+  .game-v2 .search-block > .button-row {
+    display: none;
+  }
+
+  .game-v2 .station-panel {
+    min-height: 190px;
+  }
+
+  .game-v2 .station-card {
+    padding: 9px;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-v2 .game-hud {
+    gap: 6px;
+  }
+
+  .game-v2 .map-toolbar {
+    top: 64px;
+    gap: 8px;
+  }
+
+  .game-v2 .map-locate-button {
+    top: 112px;
+    left: 10px;
+  }
+
+  .game-v2 .control-panel {
+    right: 7px;
+    bottom: 116px;
+    left: 7px;
+    max-height: 44vh;
+    padding: 9px;
+  }
+
+  .game-v2 .resource-dock {
+    right: 7px;
+    bottom: 7px;
+    left: 7px;
+    gap: 6px;
+  }
+
+  .game-v2 .resource-node {
+    min-height: 82px;
+    padding-inline: 4px;
+  }
+}
