@@ -16,7 +16,8 @@ const GRADE_LABELS = {
 };
 const PRICE_GRADES = ["regular", "premium", "diesel"];
 const NEAR_CHEAP_DELTA = 3;
-const STATION_LIMIT = 160;
+const STATION_LIMIT = 500;
+const DISPLAY_STATION_LIMIT = 160;
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 const TILE_PROVIDERS = [
@@ -1097,8 +1098,9 @@ function setQuickNav(link, view, kind) {
 }
 
 function renderMarkers() {
-  const views = getStationViews();
-  const summary = getDealSummary(views);
+  const allViews = getStationViews();
+  const views = sortViews(allViews).slice(0, DISPLAY_STATION_LIMIT);
+  const summary = getDealSummary(allViews);
   const bestId = summary.cheapest?.station.id;
   const activeIds = new Set();
 
@@ -1131,10 +1133,12 @@ function renderMarkers() {
 
 function renderList() {
   const views = sortViews(getStationViews());
-  el.stationCount.textContent = String(views.length);
+  const visibleViews = views.slice(0, DISPLAY_STATION_LIMIT);
+  el.stationCount.textContent =
+    views.length > DISPLAY_STATION_LIMIT ? `${visibleViews.length}/${views.length}` : String(views.length);
   if (el.hudStationMetric) el.hudStationMetric.textContent = `${views.length} ST`;
 
-  if (views.length === 0) {
+  if (visibleViews.length === 0) {
     const message =
       state.stationFetchMessage ||
       (state.home
@@ -1157,7 +1161,7 @@ function renderList() {
     return;
   }
 
-  el.stationList.innerHTML = views
+  el.stationList.innerHTML = visibleViews
     .map((view) => {
       const selected = view.station.id === state.selectedStationId ? " is-selected" : "";
       const price = displayPrice(view);
