@@ -16,8 +16,9 @@ const GRADE_LABELS = {
 };
 const PRICE_GRADES = ["regular", "premium", "diesel"];
 const NEAR_CHEAP_DELTA = 3;
-const STATION_LIMIT = 24;
+const STATION_LIMIT = 160;
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
+const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 const TILE_PROVIDERS = [
   {
     id: "carto-light",
@@ -465,11 +466,16 @@ async function refreshStations() {
   state.selectedStationId = null;
   state.stationFetchStatus = "loading";
   state.stationFetchMessage = "実在スタンドを検索しています...";
-  const cachedStations = readStationCache(state.home, state.radius);
-  state.stations = cachedStations || [];
-  state.stationDataAge = cachedStations ? "cached" : "live";
+  const knownStations = stationsWithinRadius(state.home, state.radius, state.stations);
+  const cachedStations = mergeStationLists(state.home, state.radius, [
+    readStationCache(state.home, state.radius),
+    readNearbyStationCache(state.home, state.radius),
+    knownStations,
+  ]);
+  state.stations = cachedStations;
+  state.stationDataAge = cachedStations.length > 0 ? "cached" : "live";
   renderAll();
-  setStatus(cachedStations ? "保存済み地図データを表示中・最新確認中" : state.stationFetchMessage);
+  setStatus(cachedStations.length > 0 ? "保存済み地図データを表示中・最新確認中" : state.stationFetchMessage);
   updateHomeMarker();
   updateBaseLayer();
   map.setView([state.home.lat, state.home.lng], radiusToZoom(state.radius), { animate: false });
@@ -479,24 +485,29 @@ async function refreshStations() {
     const stations = await fetchRealStations(state.home, state.radius);
     if (token !== stationRequestToken) return;
 
-    state.stations = stations;
+    state.stations = mergeStationLists(state.home, state.radius, [stations, cachedStations, knownStations]);
     state.stationDataAge = "live";
-    writeStationCache(state.home, state.radius, stations);
-    state.stationFetchStatus = stations.length > 0 ? "ready" : "empty";
+    writeStationCache(state.home, state.radius, state.stations);
+    state.stationFetchStatus = state.stations.length > 0 ? "ready" : "empty";
     state.stationFetchMessage =
-      stations.length > 0
-        ? `${stations.length} 件の実在スタンドを表示中`
+      state.stations.length > 0
+        ? `${state.stations.length} 件の実在スタンドを表示中`
         : "半径内の実在スタンドが見つかりません。距離を広げて再取得してください";
     renderAll();
     setStatus(state.stationFetchMessage);
   } catch {
     if (token !== stationRequestToken) return;
 
-    const fallbackStations = cachedStations || readStationCache(state.home, state.radius);
-    state.stations = fallbackStations || [];
-    state.stationDataAge = fallbackStations ? "cached" : "live";
+    const fallbackStations = mergeStationLists(state.home, state.radius, [
+      cachedStations,
+      readStationCache(state.home, state.radius),
+      readNearbyStationCache(state.home, state.radius),
+      knownStations,
+    ]);
+    state.stations = fallbackStations;
+    state.stationDataAge = fallbackStations.length > 0 ? "cached" : "live";
     state.stationFetchStatus = "error";
-    state.stationFetchMessage = fallbackStations
+    state.stationFetchMessage = fallbackStations.length > 0
       ? "通信が不安定なため保存済み地図データで表示中"
       : "実在スタンドを取得できません。通信後に再取得するか距離を広げてください";
     renderAll();
@@ -505,9 +516,49 @@ async function refreshStations() {
 }
 
 async function fetchRealStations(home, radius) {
+  const overpassStations = await fetchOverpassStations(home, radius).catch(() => []);
+  if (overpassStations.length > 0) {
+    return overpassStations;
+  }
+
   const primary = await fetchNominatimStations(home, radius, "amenity");
-  if (primary.length > 0) return primary;
-  return fetchNominatimStations(home, radius, "query");
+  const fallback = primary.length > 0 ? [] : await fetchNominatimStations(home, radius, "query");
+  return mergeStationLists(home, radius, [primary, fallback]);
+}
+
+async function fetchOverpassStations(home, radius) {
+  const query = `
+    [out:json][timeout:12];
+    (
+      node["amenity"="fuel"](around:${Math.round(radius)},${home.lat},${home.lng});
+      way["amenity"="fuel"](around:${Math.round(radius)},${home.lat},${home.lng});
+      relation["amenity"="fuel"](around:${Math.round(radius)},${home.lat},${home.lng});
+    );
+    out center tags;
+  `;
+  const payload = new URLSearchParams({ data: query });
+  const data = await fetchJsonWithTimeout(
+    OVERPASS_ENDPOINT,
+    14000,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+      },
+      body: payload,
+    },
+  );
+  const elements = Array.isArray(data?.elements) ? data.elements : [];
+  return mergeStationLists(
+    home,
+    radius,
+    [
+      elements
+        .map((element) => normalizeOverpassStation(element, home, radius))
+        .filter(Boolean),
+    ],
+  );
 }
 
 function stationCacheKey(home, radius) {
@@ -522,11 +573,19 @@ function readStationCache(home, radius) {
     const entry = cache[stationCacheKey(home, radius)];
     if (!entry || !Array.isArray(entry.stations)) return null;
     if (Date.now() - Number(entry.updatedAt || 0) > STATION_CACHE_TTL_MS) return null;
-    return entry.stations.filter((station) => {
-      const lat = Number(station.lat);
-      const lng = Number(station.lng);
-      return validCoords(lat, lng) && station.id && station.name;
-    });
+    return stationsWithinRadius(home, radius, entry.stations);
+  } catch {
+    return null;
+  }
+}
+
+function readNearbyStationCache(home, radius) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(STATION_CACHE_KEY) || "{}");
+    const stations = Object.values(cache)
+      .filter((entry) => entry && Date.now() - Number(entry.updatedAt || 0) <= STATION_CACHE_TTL_MS)
+      .flatMap((entry) => (Array.isArray(entry.stations) ? entry.stations : []));
+    return stationsWithinRadius(home, radius, stations);
   } catch {
     return null;
   }
@@ -553,11 +612,57 @@ function trimStationCache(cache) {
   );
 }
 
+function stationsWithinRadius(home, radius, stations) {
+  if (!Array.isArray(stations)) return [];
+  return stations
+    .map((station) => {
+      const lat = Number(station.lat);
+      const lng = Number(station.lng);
+      if (!validCoords(lat, lng) || !station.id || !station.name) return null;
+      const distance = distanceKm(home.lat, home.lng, lat, lng);
+      if (distance * 1000 > radius + 60) return null;
+      return {
+        ...station,
+        lat,
+        lng,
+        distance,
+        coordinateLabel: station.coordinateLabel || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+      };
+    })
+    .filter(Boolean);
+}
+
+function mergeStationLists(home, radius, lists) {
+  const unique = new Map();
+  lists.flat().filter(Boolean).forEach((station) => {
+    const [normalized] = stationsWithinRadius(home, radius, [station]);
+    if (!normalized) return;
+    const existing = unique.get(normalized.id);
+    if (!existing || stationCompleteness(normalized) > stationCompleteness(existing)) {
+      unique.set(normalized.id, normalized);
+    }
+  });
+
+  return [...unique.values()]
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, STATION_LIMIT);
+}
+
+function stationCompleteness(station) {
+  return [
+    station.name && station.name !== "名称未登録の給油所",
+    station.brand,
+    station.address && station.address !== "住所未登録",
+    station.addressQuality === "番地あり" || station.addressQuality === "登録住所",
+    station.osmRef,
+  ].filter(Boolean).length;
+}
+
 async function fetchNominatimStations(home, radius, mode) {
   const params = new URLSearchParams({
     format: "jsonv2",
     bounded: "1",
-    limit: String(STATION_LIMIT),
+    limit: String(Math.min(STATION_LIMIT, 50)),
     viewbox: boundingBox(home.lat, home.lng, radius),
     addressdetails: "1",
     extratags: "1",
@@ -585,13 +690,18 @@ async function fetchNominatimStations(home, radius, mode) {
     .slice(0, STATION_LIMIT);
 }
 
-async function fetchJsonWithTimeout(url, timeoutMs) {
+async function fetchJsonWithTimeout(url, timeoutMs, options = {}) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       cache: "no-store",
       headers: { Accept: "application/json" },
+      ...options,
+      headers: {
+        Accept: "application/json",
+        ...(options.headers || {}),
+      },
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`station search ${response.status}`);
@@ -660,6 +770,71 @@ function normalizeNominatimStation(item, home, radius) {
     lng,
     distance,
     source: "osm",
+  };
+}
+
+function normalizeOverpassStation(element, home, radius) {
+  const tags = element?.tags || {};
+  const lat = Number(element?.lat ?? element?.center?.lat);
+  const lng = Number(element?.lon ?? element?.center?.lon);
+  if (!validCoords(lat, lng)) return null;
+
+  const distance = distanceKm(home.lat, home.lng, lat, lng);
+  if (distance * 1000 > radius + 60) return null;
+
+  const pseudoItem = {
+    class: "amenity",
+    type: "fuel",
+    name: tags.name,
+    namedetails: {
+      name: tags.name,
+      "name:ja": tags["name:ja"],
+      brand: tags.brand,
+    },
+    extratags: tags,
+  };
+  if (!isUsableFuelResult(pseudoItem)) return null;
+
+  const brand = tags["brand:ja"] || tags.brand || "";
+  const operator = tags["operator:ja"] || tags.operator || "";
+  const detailedName = tags["name:ja"] || tags.name || "";
+  const safeDetailedName = looksLikeStationName(detailedName, brand, operator) ? detailedName : "";
+  const name = safeDetailedName || brand || operator || "名称未登録の給油所";
+  const branch = tags["branch:ja"] || tags.branch || "";
+  const displayName =
+    branch && !name.includes(branch) && !normalizeName(name).includes(normalizeName(branch))
+      ? `${name} ${branch}`
+      : name;
+  const address = {
+    postcode: tags["addr:postcode"],
+    province: tags["addr:province"] || tags["addr:state"],
+    city: tags["addr:city"],
+    town: tags["addr:town"],
+    village: tags["addr:village"],
+    suburb: tags["addr:suburb"],
+    city_district: tags["addr:district"],
+    neighbourhood: tags["addr:neighbourhood"],
+    quarter: tags["addr:quarter"],
+    house_number: tags["addr:housenumber"],
+    road: tags["addr:street"],
+  };
+  const formattedAddress = formatStationAddress({ address, extratags: tags }, [], displayName);
+  const type = String(element.type || "node");
+  const id = String(element.id || `${lat},${lng}`);
+
+  return {
+    id: `osm:${type}:${id}`,
+    name: displayName,
+    brand: brand && brand !== displayName ? brand : "",
+    address: formattedAddress.text,
+    addressQuality: formattedAddress.quality,
+    addressNote: formattedAddress.note,
+    coordinateLabel: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+    osmRef: `${type} ${id}`,
+    lat,
+    lng,
+    distance,
+    source: "osm-overpass",
   };
 }
 
