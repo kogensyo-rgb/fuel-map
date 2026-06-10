@@ -1707,3 +1707,350 @@ h1 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* 2.1 Cute daily map skin */
+.game-v2 {
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-soft: rgba(244, 251, 255, 0.92);
+  --ink: #1d3544;
+  --muted: #657989;
+  --line: rgba(129, 177, 205, 0.32);
+  --accent: #36a8e0;
+  --accent-dark: #187eb6;
+  --amber: #f4a83b;
+  --up: #ef6c73;
+  --down: #23b981;
+  --flat: #7c8e9b;
+  --missing: #aebbc4;
+  --shadow: 0 16px 34px rgba(40, 79, 104, 0.16);
+  background: #eaf6fb;
+  color: var(--ink);
+}
+
+.game-v2 .app-shell {
+  background:
+    linear-gradient(180deg, #eaf8ff 0%, #f8fbf6 58%, #f3f7ff 100%);
+}
+
+.game-v2 .map-stage {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.44), transparent 38%),
+    #eaf6fb;
+}
+
+.game-v2 .map-stage::before {
+  background:
+    linear-gradient(115deg, transparent 0 56%, rgba(54, 168, 224, 0.12) 56% 57%, transparent 57% 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), transparent 30%, rgba(255, 255, 255, 0.2));
+}
+
+.game-v2 .map-stage::after {
+  display: none;
+}
+
+.game-v2 #map {
+  background: #eef7f5;
+}
+
+.game-v2 .leaflet-tile-pane {
+  opacity: 0.94;
+}
+
+.game-v2 .leaflet-tile {
+  filter: saturate(0.78) contrast(0.98) brightness(1.02);
+}
+
+.game-v2 .control-panel {
+  border-color: rgba(135, 184, 213, 0.42);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 251, 255, 0.9)),
+    rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.74),
+    0 18px 44px rgba(43, 84, 111, 0.18);
+  scrollbar-color: rgba(77, 166, 217, 0.72) rgba(225, 239, 247, 0.8);
+}
+
+.game-v2 .brand-mark {
+  background: linear-gradient(180deg, #fff8c7, #61d4ae);
+  color: #175044;
+  box-shadow:
+    inset 0 -4px 0 rgba(16, 92, 78, 0.12),
+    0 8px 20px rgba(41, 158, 127, 0.18);
+}
+
+.game-v2 .eyebrow,
+.game-v2 .field > span,
+.game-v2 .muted,
+.game-v2 .station-meta,
+.game-v2 .station-address,
+.game-v2 .station-location-meta {
+  color: #657989;
+}
+
+.game-v2 h1,
+.game-v2 .section-title,
+.game-v2 .station-name,
+.game-v2 .metric strong,
+.game-v2 .deal-card strong,
+.game-v2 .price,
+.game-v2 .price-chip b {
+  color: #1d3544;
+  text-shadow: none;
+}
+
+.game-v2 .tool-block,
+.game-v2 .metric-grid,
+.game-v2 .deal-panel,
+.game-v2 .quick-nav-panel,
+.game-v2 .station-panel,
+.game-v2 .station-card {
+  border-color: rgba(129, 177, 205, 0.32);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 10px 24px rgba(44, 82, 106, 0.1);
+}
+
+.game-v2 .home-block {
+  background:
+    linear-gradient(135deg, rgba(101, 214, 173, 0.16), rgba(255, 198, 96, 0.16)),
+    rgba(255, 255, 255, 0.92);
+}
+
+.game-v2 .badge,
+.game-v2 .change-pill.down {
+  background: rgba(35, 185, 129, 0.12);
+  color: #16865e;
+}
+
+.game-v2 .change-pill.up {
+  background: rgba(239, 108, 115, 0.12);
+  color: #c8424b;
+}
+
+.game-v2 .change-pill.flat,
+.game-v2 .change-pill.missing {
+  background: rgba(122, 145, 159, 0.12);
+  color: #687d8b;
+}
+
+.game-v2 .field input,
+.game-v2 .field select {
+  border-color: rgba(129, 177, 205, 0.36);
+  background: rgba(255, 255, 255, 0.94);
+  color: #1d3544;
+}
+
+.game-v2 button,
+.game-v2 .button-like {
+  border-color: rgba(92, 162, 203, 0.34);
+  background: linear-gradient(180deg, #ffffff, #eaf6ff);
+  color: #1d3544;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 8px 16px rgba(58, 102, 128, 0.12);
+}
+
+.game-v2 button.primary,
+.game-v2 .empty-state button {
+  border-color: #42aee8;
+  background: linear-gradient(180deg, #65c8ff, #2192d0);
+  color: #ffffff;
+}
+
+.game-v2 .metric,
+.game-v2 .deal-card {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.game-v2 .deal-card > span {
+  color: #1686bd;
+}
+
+.game-v2 .station-card {
+  background:
+    linear-gradient(90deg, rgba(85, 195, 255, 0.09), transparent 46%),
+    rgba(255, 255, 255, 0.94);
+}
+
+.game-v2 .station-card.is-selected {
+  border-color: #48b5ea;
+  box-shadow:
+    0 0 0 3px rgba(73, 181, 234, 0.2),
+    0 0 24px rgba(73, 181, 234, 0.15);
+}
+
+.game-v2 .station-pick {
+  color: #1d3544;
+}
+
+.game-v2 .station-location-meta span,
+.game-v2 .price-chip {
+  border-color: rgba(129, 177, 205, 0.28);
+  background: rgba(242, 249, 252, 0.94);
+  color: #607786;
+}
+
+.game-v2 .price-chip.is-active {
+  border-color: rgba(54, 168, 224, 0.64);
+  background: rgba(220, 244, 255, 0.94);
+  color: #167eb5;
+}
+
+.game-v2 .nav-links .google-link,
+.game-v2 .popup-actions .google-link {
+  border-color: #72b8f5;
+  background: linear-gradient(180deg, #eaf5ff, #cfeaff);
+  color: #1765a8;
+}
+
+.game-v2 .nav-links .apple-link,
+.game-v2 .popup-actions .apple-link {
+  border-color: #9ab0bd;
+  background: linear-gradient(180deg, #ffffff, #edf2f5);
+  color: #1d3544;
+}
+
+.game-v2 .hud-title-block,
+.game-v2 .hud-stat,
+.game-v2 .hud-temp,
+.game-v2 .status-pill,
+.game-v2 .date-slider,
+.game-v2 .legend {
+  border-color: rgba(129, 177, 205, 0.38);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(238, 249, 255, 0.9));
+  color: #1d3544;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 10px 24px rgba(43, 84, 111, 0.14);
+}
+
+.game-v2 .hud-title-block strong {
+  color: #1d3544;
+  text-shadow: none;
+}
+
+.game-v2 .hud-title-block span,
+.game-v2 .date-slider span,
+.game-v2 .legend {
+  color: #667d8a;
+}
+
+.game-v2 .hud-stat svg,
+.game-v2 .status-pill svg {
+  color: #36a8e0;
+}
+
+.game-v2 .hud-temp {
+  border-color: rgba(255, 188, 83, 0.62);
+  background: linear-gradient(180deg, #fff6c8, #ffc95c);
+  color: #6a4a06;
+  font-size: 15px;
+}
+
+.game-v2 .resource-dock {
+  border-color: rgba(129, 177, 205, 0.42);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(233, 247, 255, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 18px 44px rgba(45, 91, 118, 0.18);
+}
+
+.game-v2 .resource-node {
+  border-color: rgba(129, 177, 205, 0.36);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 249, 255, 0.94)),
+    rgba(255, 255, 255, 0.96);
+  color: #1d3544;
+}
+
+.game-v2 .resource-node.is-active {
+  border-color: #48b5ea;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(221, 245, 255, 0.96)),
+    rgba(232, 248, 255, 0.96);
+  box-shadow:
+    0 0 0 3px rgba(83, 191, 239, 0.2),
+    0 0 28px rgba(83, 191, 239, 0.18);
+}
+
+.game-v2 .resource-node em {
+  color: #187eb6;
+}
+
+.game-v2 .resource-icon.regular {
+  background: linear-gradient(180deg, #8dffc9, #22b984);
+}
+
+.game-v2 .resource-icon.premium {
+  background: linear-gradient(180deg, #ffe38a, #f3a83c);
+}
+
+.game-v2 .resource-icon.diesel {
+  background: linear-gradient(180deg, #b5dcff, #65a6e6);
+}
+
+.game-v2 .fuel-marker {
+  border-color: rgba(255, 255, 255, 0.98);
+  background: linear-gradient(180deg, #6ecbff, #2386c5);
+  box-shadow:
+    0 0 0 4px rgba(54, 168, 224, 0.14),
+    0 10px 20px rgba(45, 91, 118, 0.22);
+  color: #fff;
+}
+
+.game-v2 .fuel-marker.best {
+  outline: 4px solid rgba(255, 201, 92, 0.78);
+}
+
+.game-v2 .fuel-marker.down {
+  background: linear-gradient(180deg, #79eeba, #23a877);
+}
+
+.game-v2 .fuel-marker.up {
+  background: linear-gradient(180deg, #ff9a9f, #d9545e);
+}
+
+.game-v2 .fuel-marker.flat {
+  background: linear-gradient(180deg, #dceaf1, #7d98a8);
+}
+
+.game-v2 .home-marker {
+  border-color: #ffffff;
+  background: linear-gradient(180deg, #4fb7ef, #187eb6);
+  color: #ffffff;
+  box-shadow:
+    0 0 0 5px rgba(79, 183, 239, 0.18),
+    0 10px 22px rgba(45, 91, 118, 0.22);
+}
+
+.game-v2 .leaflet-popup-content-wrapper,
+.game-v2 .leaflet-popup-tip {
+  border-color: rgba(129, 177, 205, 0.34);
+  background: rgba(255, 255, 255, 0.96);
+  color: #1d3544;
+}
+
+.game-v2 .popup-row b,
+.game-v2 .popup strong,
+.game-v2 .popup-price b {
+  color: #1d3544;
+}
+
+.game-v2 .popup-price {
+  border-color: rgba(129, 177, 205, 0.3);
+  background: rgba(242, 249, 252, 0.94);
+}
+
+.game-v2 .popup-price.is-active {
+  border-color: #48b5ea;
+  background: rgba(220, 244, 255, 0.94);
+}
+
+.game-v2 .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.78);
+  color: #5d7482;
+}
