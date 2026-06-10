@@ -569,6 +569,7 @@ function normalizeNominatimStation(item, home, radius) {
     brand: brand && brand !== displayName ? brand : "",
     address: formattedAddress.text,
     addressQuality: formattedAddress.quality,
+    addressNote: formattedAddress.note,
     coordinateLabel: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
     osmRef: item.osm_type && item.osm_id ? `${item.osm_type} ${item.osm_id}` : "",
     lat,
@@ -637,31 +638,52 @@ function boundingBox(lat, lng, radiusMeters) {
 
 function formatStationAddress(item, displayParts, name) {
   const address = item.address || {};
+  const tags = item.extratags || {};
   const postcode = normalizePostcode(address.postcode);
-  const structured = uniqueAddressParts([
+  const tagFullAddress = tags["addr:full"] || tags["addr:ja"] || tags["addr:full:ja"] || "";
+  if (tagFullAddress) {
+    return {
+      text: String(tagFullAddress).trim(),
+      quality: "登録住所",
+      note: "地図登録住所",
+    };
+  }
+
+  const tagHouseNumber = tags["addr:housenumber"] || address.house_number || "";
+  const tagRoad =
+    tags["addr:street"] || address.road || address.pedestrian || address.footway || "";
+  const locality = uniqueAddressParts([
     postcode ? `〒${postcode}` : "",
     address.province || address.state || address.region || "",
     address.city || address.town || address.village || address.municipality || "",
     address.suburb || address.city_district || address.borough || "",
     address.neighbourhood || address.quarter || address.hamlet || "",
-    address.road || address.pedestrian || address.footway || "",
-    address.house_number || "",
   ]);
 
-  if (structured.length >= 3) {
+  if (tagHouseNumber && tagRoad && locality.length >= 2) {
     return {
-      text: structured.join(" "),
-      quality: address.house_number ? "番地あり" : address.road ? "町域・道路" : "町域",
+      text: uniqueAddressParts([...locality, tagRoad, tagHouseNumber]).join(" "),
+      quality: "番地あり",
+      note: "住所で確認済み",
     };
   }
 
-  const displayAddress = displayParts
-    .filter((part) => part && part !== name && part !== "日本")
-    .join("、");
+  if (locality.length >= 3) {
+    return {
+      text: locality.join(" "),
+      quality: "所在地目安",
+      note: "位置は座標優先",
+    };
+  }
 
   return {
-    text: displayAddress || "OpenStreetMap 登録地点",
-    quality: displayAddress ? "地図登録住所" : "座標のみ",
+    text:
+      displayParts
+        .filter((part) => part && part !== name && part !== "日本")
+        .slice(-3)
+        .join(" ") || "住所未登録",
+    quality: "座標のみ",
+    note: "位置は座標優先",
   };
 }
 
@@ -843,6 +865,7 @@ function renderList() {
       const addressMeta = `
         <span class="station-location-meta">
           <span>${escapeHtml(view.station.addressQuality || "地図登録住所")}</span>
+          <span>${escapeHtml(view.station.addressNote || "位置は座標優先")}</span>
           <span>座標 ${escapeHtml(view.station.coordinateLabel || "")}</span>
         </span>
       `;
@@ -1284,8 +1307,10 @@ function popupHtml(view) {
     <div class="popup">
       <strong>${escapeHtml(view.station.name)}</strong>
       <div class="popup-prices">${threePrices}</div>
-      <div class="popup-row"><span>住所</span><b>${escapeHtml(view.station.address || "--")}</b></div>
-      <div class="popup-row"><span>住所精度</span><b>${escapeHtml(view.station.addressQuality || "--")}</b></div>
+      <div class="popup-row"><span>所在地</span><b>${escapeHtml(view.station.address || "--")}</b></div>
+      <div class="popup-row"><span>住所扱い</span><b>${escapeHtml(view.station.addressQuality || "--")} · ${escapeHtml(
+        view.station.addressNote || "位置は座標優先",
+      )}</b></div>
       <div class="popup-row"><span>座標</span><b>${escapeHtml(view.station.coordinateLabel || "--")}</b></div>
       <div class="popup-row"><span>前日比</span><b>${change}</b></div>
       <div class="popup-row"><span>距離</span><b>${distanceLabel(view.station.distance)}</b></div>
