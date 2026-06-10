@@ -1,4 +1,7 @@
 const STORAGE_KEY = "nearby-fuel-map-local-v4";
+const STATION_CACHE_KEY = "nearby-fuel-map-stations-v2";
+const STATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CACHE_GRID_DEGREES = 0.01;
 
 const DEFAULT_VIEW = {
   lat: 0,
@@ -67,6 +70,7 @@ const state = {
   hasRequestedLocation: false,
   stationFetchStatus: "idle",
   stationFetchMessage: "",
+  stationDataAge: "live",
   priceSeed: defaultPriceSeed(),
   priceSeedLoaded: false,
 };
@@ -461,9 +465,11 @@ async function refreshStations() {
   state.selectedStationId = null;
   state.stationFetchStatus = "loading";
   state.stationFetchMessage = "実在スタンドを検索しています...";
-  state.stations = [];
+  const cachedStations = readStationCache(state.home, state.radius);
+  state.stations = cachedStations || [];
+  state.stationDataAge = cachedStations ? "cached" : "live";
   renderAll();
-  setStatus(state.stationFetchMessage);
+  setStatus(cachedStations ? "保存済み地図データを表示中・最新確認中" : state.stationFetchMessage);
   updateHomeMarker();
   updateBaseLayer();
   map.setView([state.home.lat, state.home.lng], radiusToZoom(state.radius), { animate: false });
@@ -474,6 +480,8 @@ async function refreshStations() {
     if (token !== stationRequestToken) return;
 
     state.stations = stations;
+    state.stationDataAge = "live";
+    writeStationCache(state.home, state.radius, stations);
     state.stationFetchStatus = stations.length > 0 ? "ready" : "empty";
     state.stationFetchMessage =
       stations.length > 0
@@ -484,10 +492,13 @@ async function refreshStations() {
   } catch {
     if (token !== stationRequestToken) return;
 
-    state.stations = [];
+    const fallbackStations = cachedStations || readStationCache(state.home, state.radius);
+    state.stations = fallbackStations || [];
+    state.stationDataAge = fallbackStations ? "cached" : "live";
     state.stationFetchStatus = "error";
-    state.stationFetchMessage =
-      "実在スタンドを取得できません。通信後に再取得するか距離を広げてください";
+    state.stationFetchMessage = fallbackStations
+      ? "通信が不安定なため保存済み地図データで表示中"
+      : "実在スタンドを取得できません。通信後に再取得するか距離を広げてください";
     renderAll();
     setStatus(state.stationFetchMessage);
   }
@@ -497,6 +508,49 @@ async function fetchRealStations(home, radius) {
   const primary = await fetchNominatimStations(home, radius, "amenity");
   if (primary.length > 0) return primary;
   return fetchNominatimStations(home, radius, "query");
+}
+
+function stationCacheKey(home, radius) {
+  const lat = Math.round(home.lat / CACHE_GRID_DEGREES) * CACHE_GRID_DEGREES;
+  const lng = Math.round(home.lng / CACHE_GRID_DEGREES) * CACHE_GRID_DEGREES;
+  return `${lat.toFixed(2)}:${lng.toFixed(2)}:${Number(radius)}`;
+}
+
+function readStationCache(home, radius) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(STATION_CACHE_KEY) || "{}");
+    const entry = cache[stationCacheKey(home, radius)];
+    if (!entry || !Array.isArray(entry.stations)) return null;
+    if (Date.now() - Number(entry.updatedAt || 0) > STATION_CACHE_TTL_MS) return null;
+    return entry.stations.filter((station) => {
+      const lat = Number(station.lat);
+      const lng = Number(station.lng);
+      return validCoords(lat, lng) && station.id && station.name;
+    });
+  } catch {
+    return null;
+  }
+}
+
+function writeStationCache(home, radius, stations) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(STATION_CACHE_KEY) || "{}");
+    cache[stationCacheKey(home, radius)] = {
+      updatedAt: Date.now(),
+      stations: stations.slice(0, STATION_LIMIT),
+    };
+    localStorage.setItem(STATION_CACHE_KEY, JSON.stringify(trimStationCache(cache)));
+  } catch {
+    // Browsers can block localStorage; the live map still works without cache.
+  }
+}
+
+function trimStationCache(cache) {
+  return Object.fromEntries(
+    Object.entries(cache)
+      .sort((a, b) => Number(b[1]?.updatedAt || 0) - Number(a[1]?.updatedAt || 0))
+      .slice(0, 8),
+  );
 }
 
 async function fetchNominatimStations(home, radius, mode) {
@@ -765,10 +819,10 @@ function renderDateControl() {
 
 function renderSourceBadge() {
   if (state.priceMode === "imported" && state.importedMaps) {
-    el.sourceBadge.textContent = "取込価格";
+    el.sourceBadge.textContent = "確認価格";
     return;
   }
-  el.sourceBadge.textContent = state.priceSeedLoaded ? "毎日更新・推定" : "推定価格";
+  el.sourceBadge.textContent = state.priceSeedLoaded ? "毎日推定" : "推定価格";
 }
 
 function renderMetrics() {
@@ -786,10 +840,10 @@ function renderMetrics() {
   }
 
   const avg = priced.reduce((sum, view) => sum + view.price, 0) / priced.length;
-  el.avgMetric.textContent = money(avg);
-  el.lowMetric.textContent = money(summary.cheapest.price);
-  if (el.hudLowMetric) el.hudLowMetric.textContent = money(summary.cheapest.price);
-  el.nearCheapMetric.textContent = money(summary.nearCheap.price);
+  el.avgMetric.textContent = estimatedMoney(avg);
+  el.lowMetric.textContent = estimatedMoney(summary.cheapest.price);
+  if (el.hudLowMetric) el.hudLowMetric.textContent = estimatedMoney(summary.cheapest.price);
+  el.nearCheapMetric.textContent = estimatedMoney(summary.nearCheap.price);
   renderDealCards(summary.cheapest, summary.nearCheap);
 }
 
@@ -804,9 +858,9 @@ function renderGradeDock() {
     lows[grade] = prices.length > 0 ? Math.min(...prices) : null;
   });
 
-  if (el.dockRegularPrice) el.dockRegularPrice.textContent = lows.regular === null ? "--" : money(lows.regular);
-  if (el.dockPremiumPrice) el.dockPremiumPrice.textContent = lows.premium === null ? "--" : money(lows.premium);
-  if (el.dockDieselPrice) el.dockDieselPrice.textContent = lows.diesel === null ? "--" : money(lows.diesel);
+  if (el.dockRegularPrice) el.dockRegularPrice.textContent = lows.regular === null ? "--" : estimatedMoney(lows.regular);
+  if (el.dockPremiumPrice) el.dockPremiumPrice.textContent = lows.premium === null ? "--" : estimatedMoney(lows.premium);
+  if (el.dockDieselPrice) el.dockDieselPrice.textContent = lows.diesel === null ? "--" : estimatedMoney(lows.diesel);
 
   el.resourceNodes.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.grade === state.grade);
@@ -838,7 +892,7 @@ function setDealCard(button, nameEl, metaEl, view) {
   button.disabled = false;
   button.dataset.stationId = view.station.id;
   nameEl.textContent = view.station.name;
-  metaEl.textContent = `${GRADE_LABELS[state.grade]} ${money(view.price)} · ${distanceLabel(
+  metaEl.textContent = `${GRADE_LABELS[state.grade]} ${displayPrice(view)} · ${distanceLabel(
     view.station.distance,
   )}`;
 }
@@ -923,7 +977,7 @@ function renderList() {
   el.stationList.innerHTML = views
     .map((view) => {
       const selected = view.station.id === state.selectedStationId ? " is-selected" : "";
-      const price = view.price === null ? "--" : money(view.price);
+      const price = displayPrice(view);
       const brand = view.station.brand ? `<span>${escapeHtml(view.station.brand)}</span>` : "";
       const address = view.station.address
         ? `<span class="station-address">${escapeHtml(view.station.address)}</span>`
@@ -952,6 +1006,8 @@ function renderList() {
               <span class="station-meta">
                 <span>${distanceLabel(view.station.distance)}</span>
                 ${brand}
+                <span>${state.stationDataAge === "cached" ? "保存済み地図" : "地図確認"}</span>
+                <span>${priceSourceLabel(view.priceSource)}</span>
               </span>
               ${address}
               ${addressMeta}
@@ -983,7 +1039,7 @@ function priceChip(view, grade) {
   return `
     <span class="price-chip${selected}">
       <span>${GRADE_LABELS[grade][0]}</span>
-      <b>${money(view.prices[grade])}</b>
+      <b>${displayGradePrice(view, grade)}</b>
     </span>
   `;
 }
@@ -1139,9 +1195,9 @@ function baselineForGrade(grade, priceSeed) {
 }
 
 function priceSourceLabel(source) {
-  if (source === "imported") return "取込";
-  if (source === "auto") return "推定";
-  return "推定";
+  if (source === "imported") return "確認価格";
+  if (source === "auto") return "推定価格";
+  return "推定価格";
 }
 
 async function handlePriceFile(event) {
@@ -1363,13 +1419,12 @@ function fuelIcon(movement, isBest, price) {
 }
 
 function popupHtml(view) {
-  const price = view.price === null ? "--" : money(view.price);
   const change = changeText(view.change);
   const threePrices = PRICE_GRADES.map(
     (grade) => `
       <div class="popup-price ${grade === state.grade ? "is-active" : ""}">
         <span>${GRADE_LABELS[grade]}</span>
-        <b>${money(view.prices[grade])}</b>
+        <b>${displayGradePrice(view, grade)}</b>
       </div>
     `,
   ).join("");
@@ -1385,6 +1440,7 @@ function popupHtml(view) {
         view.station.addressNote || "位置は座標優先",
       )}</b></div>
       <div class="popup-row"><span>座標</span><b>${escapeHtml(view.station.coordinateLabel || "--")}</b></div>
+      <div class="popup-row"><span>価格</span><b>${escapeHtml(priceSourceLabel(view.priceSource))}</b></div>
       <div class="popup-row"><span>前日比</span><b>${change}</b></div>
       <div class="popup-row"><span>距離</span><b>${distanceLabel(view.station.distance)}</b></div>
       ${
@@ -1469,6 +1525,22 @@ function findPriceRow(series, date) {
 function money(value) {
   if (value === null || Number.isNaN(value)) return "--";
   return `¥${Math.round(Number(value)).toLocaleString("ja-JP")}`;
+}
+
+function estimatedMoney(value) {
+  const text = money(value);
+  return text === "--" ? text : `約${text}`;
+}
+
+function displayPrice(view) {
+  if (!view || view.price === null || Number.isNaN(view.price)) return "--";
+  return view.priceSource === "imported" ? money(view.price) : estimatedMoney(view.price);
+}
+
+function displayGradePrice(view, grade) {
+  const value = view?.prices?.[grade];
+  if (value === null || Number.isNaN(value)) return "--";
+  return view.priceSource === "imported" ? money(value) : estimatedMoney(value);
 }
 
 function changeText(value) {

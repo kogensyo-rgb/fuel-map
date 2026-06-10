@@ -2221,6 +2221,32 @@ h1 {
   font-size: 10px;
 }
 
+.game-v2 .trust-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.game-v2 .trust-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 3px 7px;
+  border: 1px solid rgba(129, 177, 205, 0.26);
+  border-radius: 8px;
+  background: rgba(243, 250, 252, 0.94);
+  color: #5e7480;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.game-v2 .trust-strip svg {
+  width: 14px;
+  height: 14px;
+  color: #36a8e0;
+}
+
 .game-v2 button,
 .game-v2 .button-like {
   box-shadow: none;

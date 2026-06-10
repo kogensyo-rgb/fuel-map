@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>近くのガソリン価格マップ</title>
     <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260610-simple-v3" />
+    <link rel="stylesheet" href="./styles.css?v=20260610-stable-v4" />
   </head>
   <body class="game-v2">
     <div class="app-shell">
@@ -23,7 +23,7 @@
         <section class="tool-block search-block">
           <div class="section-title">
             <span>検索条件</span>
-            <span id="sourceBadge" class="badge">毎日更新</span>
+            <span id="sourceBadge" class="badge">価格推定</span>
           </div>
 
           <input id="addressInput" type="hidden" value="現在地" />
@@ -49,21 +49,26 @@
             <label class="field">
               <span>並び替え</span>
               <select id="sortInput">
-                <option value="price" selected>最安値</option>
-                <option value="nearCheap">近い安値</option>
+                <option value="price" selected>推定安値</option>
+                <option value="nearCheap">近い推定安値</option>
                 <option value="distance">距離順</option>
               </select>
             </label>
+          </div>
+
+          <div class="trust-strip" aria-label="データ確認">
+            <span><i data-lucide="map-pinned"></i>地図: OSM確認</span>
+            <span><i data-lucide="info"></i>価格: 推定</span>
           </div>
         </section>
 
         <section class="metric-grid" aria-label="今日の概要">
           <div class="metric">
-            <span>平均</span>
+            <span>推定平均</span>
             <strong id="avgMetric">--</strong>
           </div>
           <div class="metric">
-            <span>最安値</span>
+            <span>推定最安</span>
             <strong id="lowMetric">--</strong>
           </div>
           <div class="metric">
@@ -118,6 +123,6 @@
 
     <script src="./vendor/leaflet/leaflet.js"></script>
     <script src="./vendor/lucide/lucide.min.js"></script>
-    <script src="./app.js?v=20260610-simple-v3"></script>
+    <script src="./app.js?v=20260610-stable-v4"></script>
   </body>
 </html>
