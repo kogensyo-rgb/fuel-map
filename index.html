@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>近くのガソリン価格マップ</title>
     <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260610-range-v7" />
+    <link rel="stylesheet" href="./styles.css?v=20260614-maint-v9" />
   </head>
   <body class="game-v2">
     <div class="app-shell">
@@ -56,9 +56,16 @@
             </label>
           </div>
 
+          <label class="field brand-field">
+            <span>ブランド</span>
+            <select id="brandInput">
+              <option value="all" selected>すべて</option>
+            </select>
+          </label>
+
           <div class="trust-strip" aria-label="データ確認">
             <span><i data-lucide="map-pinned"></i>地図: OSM確認</span>
-            <span><i data-lucide="info"></i>価格: 推定</span>
+            <span id="priceTrustLabel"><i data-lucide="info"></i>価格: 推定</span>
           </div>
         </section>
 
@@ -123,6 +130,6 @@
 
     <script src="./vendor/leaflet/leaflet.js"></script>
     <script src="./vendor/lucide/lucide.min.js"></script>
-    <script src="./app.js?v=20260610-range-v7"></script>
+    <script src="./app.js?v=20260614-maint-v9"></script>
   </body>
 </html>

@@ -15,6 +15,14 @@ const GRADE_LABELS = {
   diesel: "軽油",
 };
 const PRICE_GRADES = ["regular", "premium", "diesel"];
+const BRAND_OPTIONS = [
+  { key: "eneos", label: "ENEOS", pattern: /eneos|エネオス/i },
+  { key: "cosmo", label: "コスモ", pattern: /cosmo|コスモ/i },
+  { key: "apollo", label: "apollostation/出光", pattern: /apollo|アポロ|出光|idemitsu/i },
+  { key: "mobil", label: "Mobil/ESSO", pattern: /mobil|esso|モービル|エッソ/i },
+  { key: "shell", label: "Shell", pattern: /shell|シェル/i },
+  { key: "other", label: "その他", pattern: null },
+];
 const NEAR_CHEAP_DELTA = 3;
 const STATION_LIMIT = 500;
 const DISPLAY_STATION_LIMIT = 160;
@@ -60,6 +68,7 @@ const state = {
   home: null,
   radius: 2000,
   grade: "regular",
+  brand: "all",
   sort: "price",
   priceMode: "demo",
   importedFeed: null,
@@ -124,6 +133,7 @@ function cacheElements() {
     "refreshButton",
     "radiusInput",
     "gradeInput",
+    "brandInput",
     "sortInput",
     "priceModeInput",
     "priceFile",
@@ -153,6 +163,7 @@ function cacheElements() {
     "dockPremiumPrice",
     "dockDieselPrice",
     "sourceBadge",
+    "priceTrustLabel",
   ].forEach((id) => {
     el[id] = document.getElementById(id);
   });
@@ -171,6 +182,7 @@ function restoreState() {
     }
     if (saved.radius) state.radius = Number(saved.radius);
     if (saved.grade && GRADE_LABELS[saved.grade]) state.grade = saved.grade;
+    if (saved.brand) state.brand = String(saved.brand);
     if (saved.sort) state.sort = saved.sort;
   } catch {
     state.home = null;
@@ -197,6 +209,7 @@ function saveState() {
         home: state.home,
         radius: state.radius,
         grade: state.grade,
+        brand: state.brand,
         sort: state.sort,
       }),
     );
@@ -211,6 +224,7 @@ function hydrateControls() {
   el.lngInput.value = state.home ? state.home.lng.toFixed(6) : "";
   el.radiusInput.value = String(state.radius);
   el.gradeInput.value = state.grade;
+  if (el.brandInput) el.brandInput.value = state.brand;
   el.sortInput.value = state.sort;
   el.priceModeInput.value = state.priceMode;
   el.dateRange.max = String(days.length - 1);
@@ -304,10 +318,16 @@ function bindEvents() {
     setGrade(el.gradeInput.value);
   });
 
+  el.brandInput?.addEventListener("change", () => {
+    state.brand = el.brandInput.value || "all";
+    saveState();
+    renderAll();
+  });
+
   el.sortInput.addEventListener("change", () => {
     state.sort = el.sortInput.value;
     saveState();
-    renderList();
+    renderAll();
   });
 
   el.priceModeInput.addEventListener("change", () => {
@@ -372,6 +392,7 @@ function readControls() {
   };
   state.radius = Number(el.radiusInput.value);
   state.grade = el.gradeInput.value;
+  state.brand = el.brandInput?.value || "all";
   state.sort = el.sortInput.value;
   state.priceMode = el.priceModeInput.value;
   saveState();
@@ -620,6 +641,7 @@ function stationsWithinRadius(home, radius, stations) {
       const lat = Number(station.lat);
       const lng = Number(station.lng);
       if (!validCoords(lat, lng) || !station.id || !station.name) return null;
+      if (!hasRegisteredStationName(station.name)) return null;
       if (!isCachedLiquidFuelStation(station)) return null;
       const distance = distanceKm(home.lat, home.lng, lat, lng);
       if (distance * 1000 > radius + 60) return null;
@@ -761,6 +783,7 @@ function normalizeNominatimStation(item, home, radius) {
     branch && !name.includes(branch) && !normalizeName(name).includes(normalizeName(branch))
       ? `${name} ${branch}`
       : name;
+  if (!hasRegisteredStationName(displayName)) return null;
   const formattedAddress = formatStationAddress(item, displayParts, displayName);
   const rawId = item.osm_type && item.osm_id ? `${item.osm_type}:${item.osm_id}` : item.place_id;
 
@@ -812,6 +835,7 @@ function normalizeOverpassStation(element, home, radius) {
     branch && !name.includes(branch) && !normalizeName(name).includes(normalizeName(branch))
       ? `${name} ${branch}`
       : name;
+  if (!hasRegisteredStationName(displayName)) return null;
   const address = {
     postcode: tags["addr:postcode"],
     province: tags["addr:province"] || tags["addr:state"],
@@ -903,6 +927,11 @@ function looksLikeStationName(value, brand = "", operator = "") {
   return true;
 }
 
+function hasRegisteredStationName(name) {
+  const text = String(name || "").trim();
+  return Boolean(text) && text !== "名称未登録の給油所";
+}
+
 function truthyTag(value) {
   if (value === true) return true;
   return ["yes", "true", "1", "designated"].includes(String(value || "").toLowerCase());
@@ -985,6 +1014,7 @@ function uniqueAddressParts(parts) {
 function renderAll() {
   renderDateControl();
   renderSourceBadge();
+  renderBrandOptions();
   renderMetrics();
   renderMarkers();
   renderList();
@@ -1002,11 +1032,53 @@ function renderDateControl() {
 }
 
 function renderSourceBadge() {
+  const freshness = priceFreshnessLabel();
   if (state.priceMode === "imported" && state.importedMaps) {
     el.sourceBadge.textContent = "確認価格";
+    if (el.priceTrustLabel) {
+      el.priceTrustLabel.innerHTML = '<i data-lucide="info"></i>価格: 確認';
+    }
     return;
   }
-  el.sourceBadge.textContent = state.priceSeedLoaded ? "毎日推定" : "推定価格";
+  el.sourceBadge.textContent = freshness;
+  if (el.priceTrustLabel) {
+    el.priceTrustLabel.innerHTML = `<i data-lucide="info"></i>価格: ${escapeHtml(freshness)}`;
+  }
+}
+
+function priceFreshnessLabel() {
+  const updated = state.priceSeed?.updated;
+  if (state.priceSeedLoaded && /^\d{4}-\d{2}-\d{2}$/.test(String(updated || ""))) {
+    return `${updated.slice(5).replace("-", "/")}推定`;
+  }
+  return "推定価格";
+}
+
+function renderBrandOptions() {
+  if (!el.brandInput) return;
+
+  const presentBrands = new Set(state.stations.map((station) => stationBrandKey(station)));
+  const options = [
+    { key: "all", label: "すべて" },
+    ...BRAND_OPTIONS.filter((option) => presentBrands.has(option.key)),
+  ];
+
+  if (state.brand !== "all" && !presentBrands.has(state.brand)) {
+    state.brand = "all";
+    saveState();
+  }
+
+  const html = options
+    .map(
+      (option) =>
+        `<option value="${escapeHtml(option.key)}">${escapeHtml(option.label)}</option>`,
+    )
+    .join("");
+
+  if (el.brandInput.innerHTML !== html) {
+    el.brandInput.innerHTML = html;
+  }
+  el.brandInput.value = state.brand;
 }
 
 function renderMetrics() {
@@ -1249,48 +1321,60 @@ function getStationViews() {
   const date = days[state.selectedDateIndex];
   const previousDate = days[state.selectedDateIndex - 1];
 
-  return state.stations.map((station) => {
-    const pricedSeries = getSeries(station);
-    const current = findPriceRow(pricedSeries.series, date);
-    const previous = previousDate ? findPriceRow(pricedSeries.series, previousDate) : null;
-    const prices = {};
-    const changes = {};
-    const movements = {};
+  return state.stations
+    .filter((station) => matchesBrandFilter(station))
+    .map((station) => {
+      const pricedSeries = getSeries(station);
+      const current = findPriceRow(pricedSeries.series, date);
+      const previous = previousDate ? findPriceRow(pricedSeries.series, previousDate) : null;
+      const prices = {};
+      const changes = {};
+      const movements = {};
 
-    Object.keys(GRADE_LABELS).forEach((grade) => {
-      const gradePrice = numericPrice(current?.[grade]);
-      const previousGradePrice = numericPrice(previous?.[grade]);
-      prices[grade] = gradePrice;
-      changes[grade] =
-        gradePrice !== null && previousGradePrice !== null
-          ? roundMoney(gradePrice - previousGradePrice)
-          : null;
-      movements[grade] =
-        changes[grade] === null
-          ? "missing"
-          : Math.abs(changes[grade]) < 0.005
-            ? "flat"
-            : changes[grade] < 0
-              ? "down"
-              : "up";
+      Object.keys(GRADE_LABELS).forEach((grade) => {
+        const gradePrice = numericPrice(current?.[grade]);
+        const previousGradePrice = numericPrice(previous?.[grade]);
+        prices[grade] = gradePrice;
+        changes[grade] =
+          gradePrice !== null && previousGradePrice !== null
+            ? roundMoney(gradePrice - previousGradePrice)
+            : null;
+        movements[grade] =
+          changes[grade] === null
+            ? "missing"
+            : Math.abs(changes[grade]) < 0.005
+              ? "flat"
+              : changes[grade] < 0
+                ? "down"
+                : "up";
+      });
+
+      const price = prices[state.grade];
+      const change = changes[state.grade];
+      const movement = movements[state.grade];
+
+      return {
+        station,
+        price,
+        change,
+        movement,
+        prices,
+        changes,
+        movements,
+        priceSource: pricedSeries.source,
+        series: pricedSeries.series,
+      };
     });
+}
 
-    const price = prices[state.grade];
-    const change = changes[state.grade];
-    const movement = movements[state.grade];
+function matchesBrandFilter(station) {
+  return state.brand === "all" || stationBrandKey(station) === state.brand;
+}
 
-    return {
-      station,
-      price,
-      change,
-      movement,
-      prices,
-      changes,
-      movements,
-      priceSource: pricedSeries.source,
-      series: pricedSeries.series,
-    };
-  });
+function stationBrandKey(station) {
+  const text = [station.brand, station.name, station.operator].filter(Boolean).join(" ");
+  const match = BRAND_OPTIONS.find((option) => option.pattern && option.pattern.test(text));
+  return match?.key || "other";
 }
 
 function sortViews(views) {
@@ -1383,8 +1467,8 @@ function baselineForGrade(grade, priceSeed) {
 
 function priceSourceLabel(source) {
   if (source === "imported") return "確認価格";
-  if (source === "auto") return "推定価格";
-  return "推定価格";
+  if (source === "auto") return priceFreshnessLabel();
+  return priceFreshnessLabel();
 }
 
 async function handlePriceFile(event) {

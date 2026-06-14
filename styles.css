@@ -2227,6 +2227,10 @@ h1 {
   gap: 6px;
 }
 
+.game-v2 .brand-field {
+  margin-top: -2px;
+}
+
 .game-v2 .trust-strip span {
   display: inline-flex;
   align-items: center;
