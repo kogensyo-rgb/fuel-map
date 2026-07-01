@@ -1,13 +1,13 @@
 {
-  "updated": "2026-06-30",
+  "updated": "2026-07-01",
   "currency": "JPY",
   "unit": "L",
   "source": "daily-estimate",
   "note": "自動生成の推定価格です。実価格データソース接続後はこの生成処理を置き換えてください。",
-  "salt": "2026-06-30-735643724",
+  "salt": "2026-07-01-3399315029",
   "baselines": {
-    "regular": 170,
-    "premium": 185,
-    "diesel": 153
+    "regular": 175,
+    "premium": 190,
+    "diesel": 159
   }
 }
